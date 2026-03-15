@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>🍉 Арбуз Симулятор</title>
+  <title>🍉 Арбуз Симулятор — Бесконечный мир</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -93,25 +93,25 @@
 </head>
 <body>
 
-<h1>🍉 Арбуз Симулятор</h1>
+<h1>🍉 Арбуз Симулятор — Бесконечный мир</h1>
 
 <div id="game-wrap">
-  <canvas id="canvas" width="700" height="500"></canvas>
+  <canvas id="canvas" width="900" height="600"></canvas>
 </div>
 
 <div id="ui">
   <button id="btn-hands"  >🤲 Создать руки</button>
   <button id="btn-legs"   >🦵 Создать ноги</button>
-  <button id="btn-conquer" disabled>⚔️ Захватить мир!</button>
+  <button id="btn-conquer" disabled>⚔️ Начать!</button>
   <button id="btn-restart" style="display:none">🔄 Заново</button>
 </div>
 
 <div id="status">Создай себе руки и ноги, чтобы начать!</div>
-<div id="controls">Движение: WASD / ←↑↓→ &nbsp;|&nbsp; Атака: Пробел / Клик</div>
+<div id="controls">Движение: WASD / ←↑↓→ &nbsp;|&nbsp; Атака: Пробел / Клик &nbsp;|&nbsp; 🧭 Найди человека, грабь караваны, убивай жуков!</div>
 
 <script>
 // ─────────────────────────────────────────────────────────────
-//  Арбуз Симулятор  –  canvas game logic
+//  Арбуз Симулятор  –  Бесконечный мир
 // ─────────────────────────────────────────────────────────────
 
 const canvas  = document.getElementById('canvas');
@@ -143,13 +143,16 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
 }
 
 // ── Game state ────────────────────────────────────────────────
-let state = 'build';   // 'build' | 'play' | 'win' | 'dead'
+let state = 'build';   // 'build' | 'play' | 'eaten' | 'dead'
+
+// ── Camera (follows player) ──────────────────────────────────
+const cam = { x: 0, y: 0 };
 
 const player = {
-  x: W / 2, y: H / 2,
+  x: 0, y: 0,
   r: 36,
   vx: 0, vy: 0,
-  speed: 3,
+  speed: 3.5,
   hp: 100,
   maxHp: 100,
   hasHands: false,
@@ -157,52 +160,190 @@ const player = {
   attackCd: 0,
   attackRadius: 90,
   score: 0,
+  loot: 0,
 };
 
-let parasites = [];
+// ── World generation ─────────────────────────────────────────
+const CHUNK_SIZE = 400;
+const generatedChunks = {};
+let worldDecorations = [];  // procedurally placed rocks, trees, grass
+
+function chunkKey(cx, cy) { return cx + ',' + cy; }
+
+function seededRand(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+}
+
+function generateChunk(cx, cy) {
+  const key = chunkKey(cx, cy);
+  if (generatedChunks[key]) return;
+  generatedChunks[key] = true;
+
+  const seed = cx * 73856093 + cy * 19349663;
+  const rng = seededRand(Math.abs(seed));
+
+  const baseX = cx * CHUNK_SIZE;
+  const baseY = cy * CHUNK_SIZE;
+
+  // Decorations: rocks, bushes, grass patches
+  const decoCount = 3 + Math.floor(rng() * 5);
+  for (let i = 0; i < decoCount; i++) {
+    const dx = baseX + rng() * CHUNK_SIZE;
+    const dy = baseY + rng() * CHUNK_SIZE;
+    const type = rng() < 0.3 ? 'rock' : rng() < 0.6 ? 'bush' : 'grass';
+    const size = 6 + rng() * 18;
+    const hue = type === 'rock' ? 30 + rng() * 20 : 90 + rng() * 50;
+    worldDecorations.push({ x: dx, y: dy, type, size, hue });
+  }
+}
+
+function ensureChunksAround(px, py) {
+  const ccx = Math.floor(px / CHUNK_SIZE);
+  const ccy = Math.floor(py / CHUNK_SIZE);
+  const range = 3;
+  for (let dx = -range; dx <= range; dx++) {
+    for (let dy = -range; dy <= range; dy++) {
+      generateChunk(ccx + dx, ccy + dy);
+    }
+  }
+}
+
+// ── Entities ──────────────────────────────────────────────────
+let bugs = [];          // bug swarms (passive until close)
+let caravans = [];      // caravans to rob
 let particles = [];
-let worldTiles = [];   // conquered world segments
+let waveEnemies = [];   // dynamic wave attackers
+let devourerMan = null; // the person who eats you
+
 let wave = 0;
 let waveTimer = 0;
+let waveCooldown = 0;
 let totalKills = 0;
-const KILLS_TO_WIN = 30;
+let caravansRobbed = 0;
+let gameTick = 0;
+
+const BUG_AGGRO_RADIUS = 200;
+const BUG_SWARM_SPAWN_DIST = 800;
+const CARAVAN_SPAWN_DIST = 1200;
+const DEVOURER_SPAWN_DIST = 3000;
 
 const keys = {};
 
 // ── Helpers ───────────────────────────────────────────────────
 function rand(a, b) { return a + Math.random() * (b - a); }
 function dist(a, b)  { return Math.hypot(a.x - b.x, a.y - b.y); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-function spawnParasiteFromEdge() {
-  const side = Math.floor(rand(0, 4));
-  let x, y;
-  if (side === 0) { x = rand(0, W); y = -20; }
-  else if (side === 1) { x = W + 20; y = rand(0, H); }
-  else if (side === 2) { x = rand(0, W); y = H + 20; }
-  else { x = -20; y = rand(0, H); }
+// ── Bug swarms ───────────────────────────────────────────────
+function spawnBugSwarm() {
+  const angle = rand(0, Math.PI * 2);
+  const d = BUG_SWARM_SPAWN_DIST + rand(0, 400);
+  const cx = player.x + Math.cos(angle) * d;
+  const cy = player.y + Math.sin(angle) * d;
+  const count = 4 + Math.floor(rand(0, 6));
+  const swarmId = Date.now() + Math.random();
 
+  for (let i = 0; i < count; i++) {
+    bugs.push({
+      x: cx + rand(-60, 60),
+      y: cy + rand(-60, 60),
+      homeX: cx, homeY: cy,
+      r: rand(7, 12),
+      speed: rand(0.8, 1.8),
+      hp: 2,
+      maxHp: 2,
+      aggro: false,
+      swarmId,
+      angle: rand(0, Math.PI * 2),
+      wanderTimer: rand(0, 100),
+      eat: 0,
+      color: `hsl(${Math.floor(rand(0, 30))},70%,35%)`,
+    });
+  }
+}
+
+// ── Caravans ─────────────────────────────────────────────────
+function spawnCaravan() {
+  const angle = rand(0, Math.PI * 2);
+  const d = CARAVAN_SPAWN_DIST + rand(0, 500);
+  const sx = player.x + Math.cos(angle) * d;
+  const sy = player.y + Math.sin(angle) * d;
+  const destAngle = angle + rand(-1, 1);
+  const travelDist = 800 + rand(0, 600);
+
+  const members = [];
+  const count = 2 + Math.floor(rand(0, 3));
+  for (let i = 0; i < count; i++) {
+    members.push({
+      offsetX: i * 40,
+      offsetY: rand(-10, 10),
+      r: rand(12, 18),
+    });
+  }
+
+  caravans.push({
+    x: sx, y: sy,
+    startX: sx, startY: sy,
+    destX: sx + Math.cos(destAngle) * travelDist,
+    destY: sy + Math.sin(destAngle) * travelDist,
+    speed: rand(0.5, 1.2),
+    hp: 5 + Math.floor(rand(0, 5)),
+    maxHp: 10,
+    loot: 10 + Math.floor(rand(0, 20)),
+    members,
+    progress: 0,
+    angle: destAngle,
+    alive: true,
+  });
+}
+
+// ── Devourer (the person who eats you) ───────────────────────
+function spawnDevourer() {
+  const angle = rand(0, Math.PI * 2);
+  const d = DEVOURER_SPAWN_DIST + rand(0, 2000);
+  devourerMan = {
+    x: player.x + Math.cos(angle) * d,
+    y: player.y + Math.sin(angle) * d,
+    r: 30,
+    mouthOpen: 0,
+    detected: false,
+  };
+}
+
+// ── Wave enemies (dynamic attack waves) ──────────────────────
+function spawnWaveEnemy() {
+  const angle = rand(0, Math.PI * 2);
+  const d = 500 + rand(0, 200);
+  const x = player.x + Math.cos(angle) * d;
+  const y = player.y + Math.sin(angle) * d;
   const speed = Math.min(rand(0.6, 1.4) + wave * 0.05, 3.5);
-  parasites.push({
+
+  waveEnemies.push({
     x, y,
     r: rand(8, 14),
     speed,
     hp: 1 + Math.floor(wave / 3),
     maxHp: 1 + Math.floor(wave / 3),
-    // worm body segments
     body: Array.from({ length: 8 }, () => ({ x, y })),
     angle: 0,
-    eat: 0,        // eating cooldown
-    color: `hsl(${rand(60,130)},70%,45%)`,
+    eat: 0,
+    color: `hsl(${Math.floor(rand(60,130))},70%,45%)`,
+    dead: false,
   });
 }
 
 function spawnWave() {
   wave++;
   const count = 3 + wave * 2;
-  for (let i = 0; i < count; i++) spawnParasiteFromEdge();
+  for (let i = 0; i < count; i++) spawnWaveEnemy();
 }
 
-function spawnParticles(x, y, color, count = 8) {
+function spawnParticles(x, y, color, count) {
+  count = count || 8;
   for (let i = 0; i < count; i++) {
     const angle = rand(0, Math.PI * 2);
     const spd   = rand(1.5, 5);
@@ -218,55 +359,73 @@ function spawnParticles(x, y, color, count = 8) {
   }
 }
 
-function spawnWorldTile(x, y) {
-  worldTiles.push({
-    x: x + rand(-20, 20),
-    y: y + rand(-20, 20),
-    r: rand(12, 22),
-    alpha: 0,
-    grow: true,
-  });
-}
-
 // ── Input ─────────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
+document.addEventListener('keydown', function(e) {
   keys[e.code] = true;
   if ((e.code === 'Space') && state === 'play') {
     e.preventDefault();
     doAttack();
   }
 });
-document.addEventListener('keyup',  e => { keys[e.code] = false; });
+document.addEventListener('keyup', function(e) { keys[e.code] = false; });
 
-canvas.addEventListener('click', e => {
+canvas.addEventListener('click', function() {
   if (state !== 'play') return;
   doAttack();
 });
 
 function doAttack() {
   if (player.attackCd > 0 || !player.hasHands) return;
-  player.attackCd = 45;
+  player.attackCd = 30;
 
-  let hit = false;
-  parasites.forEach(p => {
+  // Attack wave enemies
+  waveEnemies.forEach(function(p) {
     if (dist(player, p) < player.attackRadius + p.r) {
       p.hp--;
       spawnParticles(p.x, p.y, '#ffe082', 5);
-      hit = true;
       if (p.hp <= 0) {
         spawnParticles(p.x, p.y, p.color, 14);
-        spawnWorldTile(p.x, p.y);
         player.score++;
         totalKills++;
         p.dead = true;
       }
     }
   });
-  parasites = parasites.filter(p => !p.dead);
+  waveEnemies = waveEnemies.filter(function(p) { return !p.dead; });
+
+  // Attack bugs
+  bugs.forEach(function(b) {
+    if (dist(player, b) < player.attackRadius + b.r) {
+      b.hp--;
+      spawnParticles(b.x, b.y, '#ffe082', 4);
+      if (b.hp <= 0) {
+        spawnParticles(b.x, b.y, b.color, 10);
+        totalKills++;
+        b.dead = true;
+      }
+    }
+  });
+  bugs = bugs.filter(function(b) { return !b.dead; });
+
+  // Attack caravans
+  caravans.forEach(function(c) {
+    if (!c.alive) return;
+    if (dist(player, c) < player.attackRadius + 30) {
+      c.hp--;
+      spawnParticles(c.x, c.y, '#ffe082', 5);
+      if (c.hp <= 0) {
+        spawnParticles(c.x, c.y, '#f9a825', 20);
+        player.loot += c.loot;
+        caravansRobbed++;
+        c.alive = false;
+      }
+    }
+  });
+  caravans = caravans.filter(function(c) { return c.alive; });
 }
 
 // ── Buttons ───────────────────────────────────────────────────
-btnHands.addEventListener('click', () => {
+btnHands.addEventListener('click', function() {
   if (player.hasHands) return;
   player.hasHands = true;
   btnHands.disabled = true;
@@ -274,7 +433,7 @@ btnHands.addEventListener('click', () => {
   updateBuildStatus();
 });
 
-btnLegs.addEventListener('click', () => {
+btnLegs.addEventListener('click', function() {
   if (player.hasLegs) return;
   player.hasLegs = true;
   btnLegs.disabled = true;
@@ -282,23 +441,29 @@ btnLegs.addEventListener('click', () => {
   updateBuildStatus();
 });
 
-btnConquer.addEventListener('click', () => {
+btnConquer.addEventListener('click', function() {
   if (state !== 'build') return;
   state = 'play';
   btnConquer.disabled = true;
   btnConquer.style.display = 'none';
-  statusEl.textContent = `Волна ${wave + 1}! Уничтожь паразитов!`;
+
+  // Spawn initial world content
+  for (let i = 0; i < 5; i++) spawnBugSwarm();
+  for (let i = 0; i < 3; i++) spawnCaravan();
+  spawnDevourer();
   spawnWave();
+
+  statusEl.textContent = 'Исследуй мир! Грабь караваны, убивай жуков, найди ЧЕЛОВЕКА!';
 });
 
-btnRestart.addEventListener('click', () => {
+btnRestart.addEventListener('click', function() {
   location.reload();
 });
 
 function updateBuildStatus() {
   if (player.hasHands && player.hasLegs) {
     btnConquer.disabled = false;
-    statusEl.textContent = '✅ Готово! Нажми «Захватить мир!» чтобы начать!';
+    statusEl.textContent = '✅ Готово! Нажми «Начать!» чтобы отправиться в мир!';
   } else if (player.hasHands) {
     statusEl.textContent = '✅ Руки созданы! Теперь создай ноги.';
   } else if (player.hasLegs) {
@@ -308,13 +473,16 @@ function updateBuildStatus() {
 
 // ── Update ────────────────────────────────────────────────────
 function update() {
+  gameTick++;
   if (state === 'play') updatePlay();
   updateParticles();
-  updateWorldTiles();
 }
 
 function updatePlay() {
-  // Movement (only with legs)
+  // Generate chunks around player
+  ensureChunksAround(player.x, player.y);
+
+  // Movement
   if (player.hasLegs) {
     if (keys['ArrowLeft']  || keys['KeyA']) player.vx -= 0.6;
     if (keys['ArrowRight'] || keys['KeyD']) player.vx += 0.6;
@@ -325,31 +493,32 @@ function updatePlay() {
   player.vx *= 0.82;
   player.vy *= 0.82;
 
-  const spd = player.speed * (player.hasLegs ? 1 : 0.35);
-  const mag = Math.hypot(player.vx, player.vy);
+  var spd = player.speed * (player.hasLegs ? 1 : 0.35);
+  var mag = Math.hypot(player.vx, player.vy);
   if (mag > spd) {
     player.vx = (player.vx / mag) * spd;
     player.vy = (player.vy / mag) * spd;
   }
 
-  player.x = Math.max(player.r, Math.min(W - player.r, player.x + player.vx));
-  player.y = Math.max(player.r, Math.min(H - player.r, player.y + player.vy));
+  // No boundaries — infinite world!
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // Camera follows player
+  cam.x = player.x - W / 2;
+  cam.y = player.y - H / 2;
 
   if (player.attackCd > 0) player.attackCd--;
 
-  // Parasites update
-  parasites.forEach(p => {
-    // Move toward player
-    const angle = Math.atan2(player.y - p.y, player.x - p.x);
+  // ── Update wave enemies ──
+  waveEnemies.forEach(function(p) {
+    var angle = Math.atan2(player.y - p.y, player.x - p.x);
     p.angle = angle;
     p.x += Math.cos(angle) * p.speed;
     p.y += Math.sin(angle) * p.speed;
-
-    // Update worm body
     p.body.unshift({ x: p.x, y: p.y });
     if (p.body.length > 8) p.body.pop();
 
-    // Eat player
     if (dist(player, p) < player.r + p.r) {
       p.eat++;
       if (p.eat > 0 && p.eat % 30 === 0) {
@@ -361,111 +530,306 @@ function updatePlay() {
     }
   });
 
-  // Wave spawning
-  waveTimer++;
-  if (parasites.length === 0 && waveTimer > 60) {
-    if (totalKills >= KILLS_TO_WIN) {
-      state = 'win';
-      statusEl.textContent = '🏆 МИР ЗАХВАЧЕН! Арбуз победил!';
+  // ── Update bugs ──
+  bugs.forEach(function(b) {
+    var d = dist(player, b);
+
+    // Aggro check
+    if (d < BUG_AGGRO_RADIUS) {
+      b.aggro = true;
+    }
+
+    if (b.aggro) {
+      // Chase player
+      var angle = Math.atan2(player.y - b.y, player.x - b.x);
+      b.angle = angle;
+      b.x += Math.cos(angle) * b.speed;
+      b.y += Math.sin(angle) * b.speed;
+
+      // Damage player
+      if (d < player.r + b.r) {
+        b.eat++;
+        if (b.eat > 0 && b.eat % 40 === 0) {
+          player.hp -= 3;
+          spawnParticles(player.x, player.y, '#ef5350', 4);
+        }
+      } else {
+        b.eat = 0;
+      }
+    } else {
+      // Wander near home
+      b.wanderTimer += 0.02;
+      b.x = b.homeX + Math.cos(b.wanderTimer + b.angle) * 30;
+      b.y = b.homeY + Math.sin(b.wanderTimer * 0.7 + b.angle) * 30;
+    }
+  });
+
+  // ── Update caravans ──
+  caravans.forEach(function(c) {
+    if (!c.alive) return;
+    c.progress += c.speed;
+    var totalDist = Math.hypot(c.destX - c.startX, c.destY - c.startY);
+    var t = clamp(c.progress / totalDist, 0, 1);
+    c.x = c.startX + (c.destX - c.startX) * t;
+    c.y = c.startY + (c.destY - c.startY) * t;
+
+    // If reached destination, remove
+    if (t >= 1) c.alive = false;
+  });
+  caravans = caravans.filter(function(c) { return c.alive; });
+
+  // ── Update devourer ──
+  if (devourerMan) {
+    var d = dist(player, devourerMan);
+    devourerMan.detected = d < 300;
+    devourerMan.mouthOpen = Math.sin(gameTick * 0.08) * 0.3 + 0.3;
+
+    // If player touches the devourer — they get eaten!
+    if (d < player.r + devourerMan.r) {
+      state = 'eaten';
+      spawnParticles(player.x, player.y, '#e53935', 40);
+      statusEl.textContent = '👤 ЧЕЛОВЕК ТЕБЯ СЪЕЛ! Ты нашёл его... но он оказался голодным!';
       btnRestart.style.display = 'inline-block';
       return;
     }
+  }
+
+  // ── Dynamic wave spawning ──
+  waveTimer++;
+  if (waveEnemies.length === 0 && waveTimer > 120) {
     waveTimer = 0;
-    statusEl.textContent = `🌊 Волна ${wave + 1}! Уничтожь паразитов!`;
     spawnWave();
   }
 
+  // Spawn more bugs periodically
+  if (gameTick % 300 === 0 && bugs.length < 60) {
+    spawnBugSwarm();
+  }
+
+  // Spawn more caravans periodically
+  if (gameTick % 500 === 0 && caravans.length < 5) {
+    spawnCaravan();
+  }
+
+  // Cull far-away entities
+  bugs = bugs.filter(function(b) { return dist(player, b) < 2000; });
+
+  // Player death
   if (player.hp <= 0) {
     player.hp = 0;
     state = 'dead';
-    statusEl.textContent = '💀 Паразиты съели арбуз! Игра окончена.';
+    statusEl.textContent = '💀 Арбуз погиб! Игра окончена.';
     btnRestart.style.display = 'inline-block';
     spawnParticles(player.x, player.y, '#4caf50', 30);
   }
 
-  // Status during wave
+  // Status
   if (state === 'play') {
+    var devDist = devourerMan ? Math.floor(dist(player, devourerMan)) : '???';
     statusEl.textContent =
-      `🌊 Волна ${wave} | ☠️ Убито: ${totalKills}/${KILLS_TO_WIN} | 🍉 Паразитов: ${parasites.length}`;
+      '🌊 Волна ' + wave + ' | ☠️ Убито: ' + totalKills +
+      ' | 💰 Лут: ' + player.loot +
+      ' | 📦 Караванов ограблено: ' + caravansRobbed +
+      ' | 👤 До человека: ' + devDist;
   }
 }
 
 function updateParticles() {
-  particles.forEach(p => {
+  particles.forEach(function(p) {
     p.x += p.vx; p.y += p.vy;
     p.vx *= 0.9; p.vy *= 0.9;
     p.life--;
   });
-  particles = particles.filter(p => p.life > 0);
-}
-
-function updateWorldTiles() {
-  worldTiles.forEach(t => {
-    if (t.grow) {
-      t.alpha += 0.04;
-      if (t.alpha >= 0.55) { t.alpha = 0.55; t.grow = false; }
-    }
-  });
+  particles = particles.filter(function(p) { return p.life > 0; });
 }
 
 // ── Draw ──────────────────────────────────────────────────────
 function draw() {
-  // Background
   ctx.fillStyle = '#1a1a2e';
   ctx.fillRect(0, 0, W, H);
 
-  drawGrid();
-  drawWorldTiles();
-  drawParticles();
-  drawParasites();
-  drawPlayer();
-  drawHUD();
+  ctx.save();
+  ctx.translate(-cam.x, -cam.y);
 
-  if (state === 'win') drawWinOverlay();
+  drawGrid();
+  drawDecorations();
+  drawCaravans();
+  drawBugs();
+  drawWaveEnemies();
+  drawDevourer();
+  drawParticles();
+  drawPlayer();
+
+  ctx.restore();
+
+  drawHUD();
+  drawMinimap();
+
+  if (state === 'eaten') drawEatenOverlay();
   if (state === 'dead') drawDeadOverlay();
 }
 
 function drawGrid() {
   ctx.strokeStyle = '#ffffff08';
   ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 40) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  var startX = Math.floor(cam.x / 40) * 40;
+  var startY = Math.floor(cam.y / 40) * 40;
+  for (var x = startX; x < cam.x + W + 40; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, cam.y); ctx.lineTo(x, cam.y + H); ctx.stroke();
   }
-  for (let y = 0; y < H; y += 40) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  for (var y = startY; y < cam.y + H + 40; y += 40) {
+    ctx.beginPath(); ctx.moveTo(cam.x, y); ctx.lineTo(cam.x + W, y); ctx.stroke();
   }
 }
 
-function drawWorldTiles() {
-  worldTiles.forEach(t => {
-    ctx.globalAlpha = t.alpha;
-    ctx.fillStyle = '#ab47bc';
-    ctx.beginPath();
-    ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+function drawDecorations() {
+  worldDecorations.forEach(function(d) {
+    // Cull off-screen
+    if (d.x < cam.x - 40 || d.x > cam.x + W + 40 ||
+        d.y < cam.y - 40 || d.y > cam.y + H + 40) return;
+
+    if (d.type === 'rock') {
+      ctx.fillStyle = 'hsl(' + d.hue + ',20%,35%)';
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'hsl(' + d.hue + ',15%,45%)';
+      ctx.beginPath();
+      ctx.arc(d.x - d.size * 0.2, d.y - d.size * 0.2, d.size * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (d.type === 'bush') {
+      ctx.fillStyle = 'hsl(' + d.hue + ',50%,30%)';
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'hsl(' + d.hue + ',60%,40%)';
+      ctx.beginPath();
+      ctx.arc(d.x + d.size * 0.3, d.y - d.size * 0.3, d.size * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Grass tufts
+      ctx.strokeStyle = 'hsl(' + d.hue + ',50%,35%)';
+      ctx.lineWidth = 2;
+      for (var i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(d.x + i * 4, d.y);
+        ctx.lineTo(d.x + i * 6, d.y - d.size);
+        ctx.stroke();
+      }
+    }
   });
 }
 
-function drawParticles() {
-  particles.forEach(p => {
-    ctx.globalAlpha = p.life / p.maxLife;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fill();
+function drawCaravans() {
+  caravans.forEach(function(c) {
+    if (!c.alive) return;
+    // Draw each member
+    c.members.forEach(function(m, idx) {
+      var mx = c.x - Math.cos(c.angle) * m.offsetX;
+      var my = c.y - Math.sin(c.angle) * m.offsetX + m.offsetY;
+
+      // Body (brown box / pack animal)
+      ctx.fillStyle = '#8d6e63';
+      ctx.beginPath();
+      ctx.arc(mx, my, m.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pack on top
+      ctx.fillStyle = '#f9a825';
+      ctx.fillRect(mx - m.r * 0.6, my - m.r * 1.1, m.r * 1.2, m.r * 0.5);
+
+      // Legs
+      ctx.strokeStyle = '#5d4037';
+      ctx.lineWidth = 3;
+      var legOff = Math.sin(gameTick * 0.1 + idx) * 4;
+      ctx.beginPath();
+      ctx.moveTo(mx - m.r * 0.4, my + m.r * 0.7);
+      ctx.lineTo(mx - m.r * 0.4, my + m.r * 1.3 + legOff);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(mx + m.r * 0.4, my + m.r * 0.7);
+      ctx.lineTo(mx + m.r * 0.4, my + m.r * 1.3 - legOff);
+      ctx.stroke();
+    });
+
+    // HP bar
+    var bw = 40;
+    var bx = c.x - bw / 2;
+    var by = c.y - 30;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(bx, by, bw, 4);
+    ctx.fillStyle = '#f9a825';
+    ctx.fillRect(bx, by, bw * Math.max(0, c.hp / c.maxHp), 4);
+
+    // Label
+    ctx.fillStyle = '#f9a825';
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('📦 Караван', c.x, c.y - 36);
+    ctx.textAlign = 'left';
   });
-  ctx.globalAlpha = 1;
 }
 
-function drawParasites() {
-  parasites.forEach(p => {
-    // Draw worm body segments
-    const segCount = p.body.length;
-    for (let i = segCount - 1; i >= 0; i--) {
-      const seg = p.body[i];
-      const t = i / segCount;
-      const segR = p.r * (0.45 + 0.55 * (1 - i / segCount));
+function drawBugs() {
+  bugs.forEach(function(b) {
+    // Shell
+    ctx.fillStyle = b.aggro ? '#d32f2f' : b.color;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Shell pattern
+    ctx.strokeStyle = b.aggro ? '#ff5252' : '#4e342e';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y - b.r);
+    ctx.lineTo(b.x, b.y + b.r);
+    ctx.stroke();
+
+    // Eyes
+    var ea = b.aggro ? Math.atan2(player.y - b.y, player.x - b.x) : b.angle;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(b.x + Math.cos(ea - 0.4) * b.r * 0.5, b.y + Math.sin(ea - 0.4) * b.r * 0.5, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(b.x + Math.cos(ea + 0.4) * b.r * 0.5, b.y + Math.sin(ea + 0.4) * b.r * 0.5, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Legs
+    ctx.strokeStyle = '#3e2723';
+    ctx.lineWidth = 1.5;
+    for (var i = 0; i < 3; i++) {
+      var la = ea + Math.PI / 2 + i * 0.4 - 0.4;
+      var lb = ea - Math.PI / 2 - i * 0.4 + 0.4;
+      var legWobble = Math.sin(gameTick * 0.15 + i) * 3;
+      ctx.beginPath();
+      ctx.moveTo(b.x + Math.cos(la) * b.r, b.y + Math.sin(la) * b.r);
+      ctx.lineTo(b.x + Math.cos(la) * (b.r + 6) + legWobble, b.y + Math.sin(la) * (b.r + 6));
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(b.x + Math.cos(lb) * b.r, b.y + Math.sin(lb) * b.r);
+      ctx.lineTo(b.x + Math.cos(lb) * (b.r + 6) - legWobble, b.y + Math.sin(lb) * (b.r + 6));
+      ctx.stroke();
+    }
+
+    // Aggro indicator
+    if (b.aggro) {
+      ctx.fillStyle = '#ff1744';
+      ctx.font = 'bold 10px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('!', b.x, b.y - b.r - 5);
+      ctx.textAlign = 'left';
+    }
+  });
+}
+
+function drawWaveEnemies() {
+  waveEnemies.forEach(function(p) {
+    var segCount = p.body.length;
+    for (var i = segCount - 1; i >= 0; i--) {
+      var seg = p.body[i];
+      var segR = p.r * (0.45 + 0.55 * (1 - i / segCount));
       ctx.globalAlpha = 0.85;
       ctx.fillStyle = i === 0 ? darken(p.color, 20) : p.color;
       ctx.beginPath();
@@ -474,19 +838,17 @@ function drawParasites() {
     }
     ctx.globalAlpha = 1;
 
-    // Eyes on head
-    const ex = p.x + Math.cos(p.angle) * p.r * 0.5;
-    const ey = p.y + Math.sin(p.angle) * p.r * 0.5;
+    var ex = p.x + Math.cos(p.angle) * p.r * 0.5;
+    var ey = p.y + Math.sin(p.angle) * p.r * 0.5;
     ctx.fillStyle = '#fff';
     ctx.beginPath(); ctx.arc(ex, ey, p.r * 0.25, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#111';
     ctx.beginPath(); ctx.arc(ex + Math.cos(p.angle) * 1.5, ey + Math.sin(p.angle) * 1.5, p.r * 0.12, 0, Math.PI * 2); ctx.fill();
 
-    // HP bar
     if (p.maxHp > 1) {
-      const bw = p.r * 2.5;
-      const bx = p.x - bw / 2;
-      const by = p.y - p.r - 8;
+      var bw = p.r * 2.5;
+      var bx = p.x - bw / 2;
+      var by = p.y - p.r - 8;
       ctx.fillStyle = '#333';
       ctx.fillRect(bx, by, bw, 4);
       ctx.fillStyle = '#ef5350';
@@ -495,12 +857,82 @@ function drawParasites() {
   });
 }
 
+function drawDevourer() {
+  if (!devourerMan) return;
+  var d = devourerMan;
+
+  // Pulsing glow
+  var glow = Math.sin(gameTick * 0.05) * 5 + 10;
+  ctx.fillStyle = '#e040fb22';
+  ctx.beginPath();
+  ctx.arc(d.x, d.y, d.r + glow, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body
+  ctx.fillStyle = '#e0e0e0';
+  ctx.beginPath();
+  ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Head
+  ctx.fillStyle = '#ffcc80';
+  ctx.beginPath();
+  ctx.arc(d.x, d.y - d.r * 0.7, d.r * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eyes (red, menacing)
+  ctx.fillStyle = '#d50000';
+  ctx.beginPath();
+  ctx.arc(d.x - 7, d.y - d.r * 0.8, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(d.x + 7, d.y - d.r * 0.8, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mouth (opens and closes)
+  ctx.fillStyle = '#1a1a1a';
+  ctx.beginPath();
+  ctx.arc(d.x, d.y - d.r * 0.5, 8, 0, Math.PI * (0.5 + d.mouthOpen));
+  ctx.fill();
+
+  // Arms reaching out
+  ctx.strokeStyle = '#ffcc80';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  var armSwing = Math.sin(gameTick * 0.06) * 15;
+  ctx.beginPath();
+  ctx.moveTo(d.x - d.r, d.y);
+  ctx.lineTo(d.x - d.r - 20, d.y - 10 + armSwing);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(d.x + d.r, d.y);
+  ctx.lineTo(d.x + d.r + 20, d.y - 10 - armSwing);
+  ctx.stroke();
+
+  // Label
+  ctx.fillStyle = '#e040fb';
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('👤 ЧЕЛОВЕК', d.x, d.y - d.r - 20);
+  ctx.textAlign = 'left';
+
+  if (d.detected) {
+    ctx.fillStyle = '#ff1744';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚠️ ОН РЯДОМ! ⚠️', d.x, d.y + d.r + 25);
+    ctx.textAlign = 'left';
+  }
+}
+
 function drawPlayer() {
-  const { x, y, r, hasHands, hasLegs, attackCd } = player;
+  var x = player.x, y = player.y, r = player.r;
+  var hasHands = player.hasHands, hasLegs = player.hasLegs;
+  var attackCd = player.attackCd;
 
   // Attack ring
   if (attackCd > 0 && hasHands) {
-    ctx.globalAlpha = attackCd / 45 * 0.35;
+    ctx.globalAlpha = attackCd / 30 * 0.35;
     ctx.strokeStyle = '#ffe082';
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -509,19 +941,17 @@ function drawPlayer() {
     ctx.globalAlpha = 1;
   }
 
-  // ── Legs ──
+  // Legs
   if (hasLegs) {
     ctx.strokeStyle = '#42a5f5';
     ctx.lineWidth = 5;
     ctx.lineCap = 'round';
-    const legWobble = Math.sin(Date.now() / 150) * 5;
-    // Left leg
+    var legWobble = Math.sin(Date.now() / 150) * 5;
     ctx.beginPath();
     ctx.moveTo(x - r * 0.4, y + r * 0.7);
     ctx.lineTo(x - r * 0.6, y + r * 1.5 + legWobble);
     ctx.lineTo(x - r * 0.9, y + r * 1.5 + legWobble);
     ctx.stroke();
-    // Right leg
     ctx.beginPath();
     ctx.moveTo(x + r * 0.4, y + r * 0.7);
     ctx.lineTo(x + r * 0.6, y + r * 1.5 - legWobble);
@@ -529,21 +959,19 @@ function drawPlayer() {
     ctx.stroke();
   }
 
-  // ── Body (watermelon) ──
-  // Outer green rind
+  // Body (watermelon)
   ctx.fillStyle = '#388e3c';
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
 
-  // Lighter green stripes
   ctx.save();
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.clip();
   ctx.strokeStyle = '#4caf5066';
   ctx.lineWidth = 4;
-  for (let i = -r; i <= r; i += 10) {
+  for (var i = -r; i <= r; i += 10) {
     ctx.beginPath();
     ctx.moveTo(x + i, y - r);
     ctx.lineTo(x + i, y + r);
@@ -551,7 +979,6 @@ function drawPlayer() {
   }
   ctx.restore();
 
-  // Inner red flesh
   ctx.fillStyle = '#e53935';
   ctx.beginPath();
   ctx.arc(x, y, r * 0.75, 0, Math.PI * 2);
@@ -559,23 +986,19 @@ function drawPlayer() {
 
   // Seeds
   ctx.fillStyle = '#1a1a1a';
-  const seeds = [
-    [-0.25, -0.15], [0.2, -0.2], [0, 0.1],
-    [-0.15, 0.25], [0.3, 0.15],
-  ];
-  seeds.forEach(([sx, sy]) => {
+  var seeds = [[-0.25, -0.15], [0.2, -0.2], [0, 0.1], [-0.15, 0.25], [0.3, 0.15]];
+  seeds.forEach(function(s) {
     ctx.beginPath();
-    ctx.ellipse(x + sx * r, y + sy * r, r * 0.065, r * 0.13, sx * 1.2, 0, Math.PI * 2);
+    ctx.ellipse(x + s[0] * r, y + s[1] * r, r * 0.065, r * 0.13, s[0] * 1.2, 0, Math.PI * 2);
     ctx.fill();
   });
 
-  // ── Hands/Arms ──
+  // Arms
   if (hasHands) {
     ctx.strokeStyle = '#ff7043';
     ctx.lineWidth = 5;
     ctx.lineCap = 'round';
-    const armSwing = Math.sin(Date.now() / 200) * 8;
-    // Left arm
+    var armSwing = Math.sin(Date.now() / 200) * 8;
     ctx.beginPath();
     ctx.moveTo(x - r * 0.85, y - r * 0.1);
     ctx.lineTo(x - r * 1.7, y - r * 0.3 + armSwing);
@@ -584,7 +1007,6 @@ function drawPlayer() {
     ctx.beginPath();
     ctx.arc(x - r * 1.7, y - r * 0.3 + armSwing, 7, 0, Math.PI * 2);
     ctx.fill();
-    // Right arm
     ctx.beginPath();
     ctx.moveTo(x + r * 0.85, y - r * 0.1);
     ctx.lineTo(x + r * 1.7, y - r * 0.3 - armSwing);
@@ -596,7 +1018,6 @@ function drawPlayer() {
   }
 
   // Face
-  // Eyes
   ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.arc(x - r * 0.28, y - r * 0.15, r * 0.18, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(x + r * 0.28, y - r * 0.15, r * 0.18, 0, Math.PI * 2); ctx.fill();
@@ -604,8 +1025,7 @@ function drawPlayer() {
   ctx.beginPath(); ctx.arc(x - r * 0.24, y - r * 0.12, r * 0.09, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(x + r * 0.32, y - r * 0.12, r * 0.09, 0, Math.PI * 2); ctx.fill();
 
-  // Mouth
-  if (state === 'dead') {
+  if (state === 'dead' || state === 'eaten') {
     ctx.strokeStyle = '#1a1a1a';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -621,52 +1041,183 @@ function drawPlayer() {
   }
 }
 
+function drawParticles() {
+  particles.forEach(function(p) {
+    ctx.globalAlpha = p.life / p.maxLife;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
 function drawHUD() {
   if (state === 'build') return;
 
   // HP bar
-  const bw = 200, bh = 14;
-  const bx = 10, by = 10;
+  var bw = 200, bh = 14;
+  var bx = 10, by = 10;
   ctx.fillStyle = '#333';
   ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill();
-  const hpRatio = player.hp / player.maxHp;
+  var hpRatio = player.hp / player.maxHp;
   ctx.fillStyle = hpRatio > 0.5 ? '#4caf50' : hpRatio > 0.25 ? '#ffc107' : '#ef5350';
   ctx.beginPath(); ctx.roundRect(bx, by, bw * hpRatio, bh, 6); ctx.fill();
   ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
   ctx.strokeRect(bx, by, bw, bh);
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 10px Arial';
-  ctx.fillText(`HP: ${player.hp}/${player.maxHp}`, bx + 5, by + 10);
+  ctx.fillText('HP: ' + player.hp + '/' + player.maxHp, bx + 5, by + 10);
 
-  // Score
+  // Stats
   ctx.fillStyle = '#ffe082';
-  ctx.font = 'bold 14px Arial';
+  ctx.font = 'bold 13px Arial';
   ctx.textAlign = 'right';
-  ctx.fillText(`⚔️ ${totalKills}/${KILLS_TO_WIN}`, W - 10, 24);
+  ctx.fillText('☠️ ' + totalKills + ' | 💰 ' + player.loot + ' | 📦 ' + caravansRobbed, W - 10, 24);
   ctx.textAlign = 'left';
 
-  // Attack cooldown hint
+  // Wave info
+  ctx.fillStyle = '#80cbc4';
+  ctx.font = 'bold 12px Arial';
+  ctx.fillText('🌊 Волна: ' + wave + ' | Враги: ' + waveEnemies.length + ' | Жуки: ' + bugs.length, 10, 40);
+
+  // Compass to devourer
+  if (devourerMan && state === 'play') {
+    var angle = Math.atan2(devourerMan.y - player.y, devourerMan.x - player.x);
+    var devDist = Math.floor(dist(player, devourerMan));
+    var compassX = W - 60;
+    var compassY = 70;
+    var compassR = 25;
+
+    ctx.fillStyle = '#1a1a2ecc';
+    ctx.beginPath();
+    ctx.arc(compassX, compassY, compassR + 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#e040fb';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(compassX, compassY, compassR + 5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Arrow
+    ctx.strokeStyle = '#e040fb';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(compassX, compassY);
+    ctx.lineTo(compassX + Math.cos(angle) * compassR, compassY + Math.sin(angle) * compassR);
+    ctx.stroke();
+
+    // Arrowhead
+    ctx.fillStyle = '#e040fb';
+    ctx.beginPath();
+    var tipX = compassX + Math.cos(angle) * compassR;
+    var tipY = compassY + Math.sin(angle) * compassR;
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(tipX + Math.cos(angle + 2.5) * 8, tipY + Math.sin(angle + 2.5) * 8);
+    ctx.lineTo(tipX + Math.cos(angle - 2.5) * 8, tipY + Math.sin(angle - 2.5) * 8);
+    ctx.fill();
+
+    ctx.fillStyle = '#e040fb';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('👤 ' + devDist, compassX, compassY + compassR + 18);
+    ctx.textAlign = 'left';
+  }
+
+  // Attack hint
   if (player.hasHands && player.attackCd > 0) {
     ctx.fillStyle = '#aaaaaa88';
     ctx.font = '11px Arial';
-    ctx.fillText('⏳ Атака перезаряжается...', 10, H - 10);
-  } else if (player.hasHands) {
+    ctx.fillText('⏳ Перезарядка...', 10, H - 10);
+  } else if (player.hasHands && state === 'play') {
     ctx.fillStyle = '#ffe08288';
     ctx.font = '11px Arial';
     ctx.fillText('Пробел / Клик — Атаковать', 10, H - 10);
   }
 }
 
-function drawWinOverlay() {
+function drawMinimap() {
+  if (state === 'build') return;
+  var mmW = 120, mmH = 90;
+  var mmX = 10, mmY = H - mmH - 30;
+  var mmScale = 0.02;
+
+  ctx.fillStyle = '#0a0a1acc';
+  ctx.fillRect(mmX, mmY, mmW, mmH);
+  ctx.strokeStyle = '#4caf50';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(mmX, mmY, mmW, mmH);
+
+  var cx = mmX + mmW / 2;
+  var cy = mmY + mmH / 2;
+
+  // Player (center)
+  ctx.fillStyle = '#4caf50';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bugs
+  bugs.forEach(function(b) {
+    var bx = cx + (b.x - player.x) * mmScale;
+    var by = cy + (b.y - player.y) * mmScale;
+    if (bx > mmX && bx < mmX + mmW && by > mmY && by < mmY + mmH) {
+      ctx.fillStyle = b.aggro ? '#ff1744' : '#795548';
+      ctx.fillRect(bx - 1, by - 1, 2, 2);
+    }
+  });
+
+  // Caravans
+  caravans.forEach(function(c) {
+    var bx = cx + (c.x - player.x) * mmScale;
+    var by = cy + (c.y - player.y) * mmScale;
+    if (bx > mmX && bx < mmX + mmW && by > mmY && by < mmY + mmH) {
+      ctx.fillStyle = '#f9a825';
+      ctx.fillRect(bx - 2, by - 2, 4, 4);
+    }
+  });
+
+  // Wave enemies
+  waveEnemies.forEach(function(e) {
+    var bx = cx + (e.x - player.x) * mmScale;
+    var by = cy + (e.y - player.y) * mmScale;
+    if (bx > mmX && bx < mmX + mmW && by > mmY && by < mmY + mmH) {
+      ctx.fillStyle = '#66bb6a';
+      ctx.fillRect(bx - 1, by - 1, 2, 2);
+    }
+  });
+
+  // Devourer
+  if (devourerMan) {
+    var dx = cx + (devourerMan.x - player.x) * mmScale;
+    var dy = cy + (devourerMan.y - player.y) * mmScale;
+    dx = clamp(dx, mmX + 3, mmX + mmW - 3);
+    dy = clamp(dy, mmY + 3, mmY + mmH - 3);
+    ctx.fillStyle = '#e040fb';
+    ctx.beginPath();
+    ctx.arc(dx, dy, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Label
+  ctx.fillStyle = '#aaa';
+  ctx.font = '9px Arial';
+  ctx.fillText('Миникарта', mmX + 2, mmY + mmH + 10);
+}
+
+function drawEatenOverlay() {
   ctx.fillStyle = '#00000099';
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#ffe082';
-  ctx.font = 'bold 52px Arial';
+  ctx.fillStyle = '#e040fb';
+  ctx.font = 'bold 42px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('🏆 МИР ЗАХВАЧЕН! 🏆', W / 2, H / 2 - 20);
+  ctx.fillText('👤 ТЕБЯ СЪЕЛИ! 👤', W / 2, H / 2 - 30);
   ctx.fillStyle = '#fff';
-  ctx.font = '24px Arial';
-  ctx.fillText(`Арбуз покорил мир! Убито паразитов: ${totalKills}`, W / 2, H / 2 + 30);
+  ctx.font = '20px Arial';
+  ctx.fillText('Ты нашёл человека... но он был голоден!', W / 2, H / 2 + 10);
+  ctx.fillStyle = '#ffe082';
+  ctx.font = '16px Arial';
+  ctx.fillText('☠️ Убито: ' + totalKills + ' | 💰 Лут: ' + player.loot + ' | 📦 Караванов: ' + caravansRobbed, W / 2, H / 2 + 45);
   ctx.textAlign = 'left';
 }
 
@@ -676,16 +1227,19 @@ function drawDeadOverlay() {
   ctx.fillStyle = '#ef5350';
   ctx.font = 'bold 46px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('💀 АРБУЗ СЪЕДЕН! 💀', W / 2, H / 2 - 20);
+  ctx.fillText('💀 АРБУЗ ПОГИБ! 💀', W / 2, H / 2 - 30);
   ctx.fillStyle = '#fff';
-  ctx.font = '22px Arial';
-  ctx.fillText(`Паразиты победили. Убито: ${totalKills}`, W / 2, H / 2 + 30);
+  ctx.font = '20px Arial';
+  ctx.fillText('Враги оказались сильнее...', W / 2, H / 2 + 10);
+  ctx.fillStyle = '#ffe082';
+  ctx.font = '16px Arial';
+  ctx.fillText('☠️ Убито: ' + totalKills + ' | 💰 Лут: ' + player.loot + ' | 📦 Караванов: ' + caravansRobbed, W / 2, H / 2 + 45);
   ctx.textAlign = 'left';
 }
 
 // ── Utils ─────────────────────────────────────────────────────
 function darken(hslStr, amount) {
-  return hslStr.replace(/(\d+)%\)$/, (_, l) => `${Math.max(0, l - amount)}%)`);
+  return hslStr.replace(/(\d+)%\)$/, function(_, l) { return Math.max(0, l - amount) + '%)'; });
 }
 
 // ── Game loop ─────────────────────────────────────────────────
