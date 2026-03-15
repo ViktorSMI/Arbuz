@@ -210,7 +210,7 @@ const SE={
   },
   _sched(){
     if(!this.playing||!this.track) return;
-    while(this.nextT<this.ctx.currentTime+0.12){
+    while(this.nextT<this.ctx.currentTime+0.5){
       const tr=this.track, sd=60/tr.bpm/4, s=this.step%tr.len;
       for(const ch of tr.ch){
         const n=ch.p[s%ch.p.length];
@@ -222,7 +222,7 @@ const SE={
       }
       this.nextT+=sd; this.step++;
     }
-    this.tid=setTimeout(()=>this._sched(),25);
+    this.tid=setTimeout(()=>this._sched(),40);
   }
 };
 
@@ -2656,10 +2656,10 @@ function drawVictory(){
 // ============================================================
 //  MENU
 // ============================================================
-document.getElementById('btn-start').addEventListener('click', ()=>{
+document.getElementById('btn-start').addEventListener('click', (ev)=>{
+  ev.stopPropagation();
   SE.init();
-  document.getElementById('overlay').classList.remove('active');
-  document.getElementById('menu').style.display='none';
+  document.getElementById('overlay').style.display='none';
   // reset game
   totalSeeds=0;
   doubleJumpUnlocked=false;
@@ -2684,6 +2684,7 @@ addEventListener('keydown', e=>{
     loadLevel(currentAct);
   }
   if((gs==='gameover'||gs==='victory')&&e.code==='Escape'){
+    document.getElementById('overlay').style.display='';
     document.getElementById('overlay').classList.add('active');
     document.getElementById('menu').style.display='block';
     gs='menu';
