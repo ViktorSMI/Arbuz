@@ -230,6 +230,12 @@ const BUG_AGGRO_RADIUS = 200;
 const BUG_SWARM_SPAWN_DIST = 800;
 const CARAVAN_SPAWN_DIST = 1200;
 const DEVOURER_SPAWN_DIST = 3000;
+const MAX_BUGS = 60;
+const MAX_CARAVANS = 5;
+const BUG_SPAWN_INTERVAL = 300;
+const CARAVAN_SPAWN_INTERVAL = 500;
+const WAVE_SPAWN_DELAY = 120;
+const ENTITY_CULL_DISTANCE = 2000;
 
 const keys = {};
 
@@ -245,8 +251,6 @@ function spawnBugSwarm() {
   const cx = player.x + Math.cos(angle) * d;
   const cy = player.y + Math.sin(angle) * d;
   const count = 4 + Math.floor(rand(0, 6));
-  const swarmId = Date.now() + Math.random();
-
   for (let i = 0; i < count; i++) {
     bugs.push({
       x: cx + rand(-60, 60),
@@ -257,7 +261,6 @@ function spawnBugSwarm() {
       hp: 2,
       maxHp: 2,
       aggro: false,
-      swarmId,
       angle: rand(0, Math.PI * 2),
       wanderTimer: rand(0, 100),
       eat: 0,
@@ -285,14 +288,15 @@ function spawnCaravan() {
     });
   }
 
+  const caravanHp = 5 + Math.floor(rand(0, 6));
   caravans.push({
     x: sx, y: sy,
     startX: sx, startY: sy,
     destX: sx + Math.cos(destAngle) * travelDist,
     destY: sy + Math.sin(destAngle) * travelDist,
     speed: rand(0.5, 1.2),
-    hp: 5 + Math.floor(rand(0, 5)),
-    maxHp: 10,
+    hp: caravanHp,
+    maxHp: caravanHp,
     loot: 10 + Math.floor(rand(0, 20)),
     members,
     progress: 0,
@@ -493,8 +497,8 @@ function updatePlay() {
   player.vx *= 0.82;
   player.vy *= 0.82;
 
-  var spd = player.speed * (player.hasLegs ? 1 : 0.35);
-  var mag = Math.hypot(player.vx, player.vy);
+  const spd = player.speed * (player.hasLegs ? 1 : 0.35);
+  const mag = Math.hypot(player.vx, player.vy);
   if (mag > spd) {
     player.vx = (player.vx / mag) * spd;
     player.vy = (player.vy / mag) * spd;
@@ -512,7 +516,7 @@ function updatePlay() {
 
   // ── Update wave enemies ──
   waveEnemies.forEach(function(p) {
-    var angle = Math.atan2(player.y - p.y, player.x - p.x);
+    const angle = Math.atan2(player.y - p.y, player.x - p.x);
     p.angle = angle;
     p.x += Math.cos(angle) * p.speed;
     p.y += Math.sin(angle) * p.speed;
@@ -532,22 +536,22 @@ function updatePlay() {
 
   // ── Update bugs ──
   bugs.forEach(function(b) {
-    var d = dist(player, b);
+    const bd = dist(player, b);
 
     // Aggro check
-    if (d < BUG_AGGRO_RADIUS) {
+    if (bd < BUG_AGGRO_RADIUS) {
       b.aggro = true;
     }
 
     if (b.aggro) {
       // Chase player
-      var angle = Math.atan2(player.y - b.y, player.x - b.x);
+      const angle = Math.atan2(player.y - b.y, player.x - b.x);
       b.angle = angle;
       b.x += Math.cos(angle) * b.speed;
       b.y += Math.sin(angle) * b.speed;
 
       // Damage player
-      if (d < player.r + b.r) {
+      if (bd < player.r + b.r) {
         b.eat++;
         if (b.eat > 0 && b.eat % 40 === 0) {
           player.hp -= 3;
@@ -568,8 +572,8 @@ function updatePlay() {
   caravans.forEach(function(c) {
     if (!c.alive) return;
     c.progress += c.speed;
-    var totalDist = Math.hypot(c.destX - c.startX, c.destY - c.startY);
-    var t = clamp(c.progress / totalDist, 0, 1);
+    const totalDist = Math.hypot(c.destX - c.startX, c.destY - c.startY);
+    const t = clamp(c.progress / totalDist, 0, 1);
     c.x = c.startX + (c.destX - c.startX) * t;
     c.y = c.startY + (c.destY - c.startY) * t;
 
@@ -580,12 +584,12 @@ function updatePlay() {
 
   // ── Update devourer ──
   if (devourerMan) {
-    var d = dist(player, devourerMan);
-    devourerMan.detected = d < 300;
+    const devDist = dist(player, devourerMan);
+    devourerMan.detected = devDist < 300;
     devourerMan.mouthOpen = Math.sin(gameTick * 0.08) * 0.3 + 0.3;
 
     // If player touches the devourer — they get eaten!
-    if (d < player.r + devourerMan.r) {
+    if (devDist < player.r + devourerMan.r) {
       state = 'eaten';
       spawnParticles(player.x, player.y, '#e53935', 40);
       statusEl.textContent = '👤 ЧЕЛОВЕК ТЕБЯ СЪЕЛ! Ты нашёл его... но он оказался голодным!';
@@ -596,23 +600,23 @@ function updatePlay() {
 
   // ── Dynamic wave spawning ──
   waveTimer++;
-  if (waveEnemies.length === 0 && waveTimer > 120) {
+  if (waveEnemies.length === 0 && waveTimer > WAVE_SPAWN_DELAY) {
     waveTimer = 0;
     spawnWave();
   }
 
   // Spawn more bugs periodically
-  if (gameTick % 300 === 0 && bugs.length < 60) {
+  if (gameTick % BUG_SPAWN_INTERVAL === 0 && bugs.length < MAX_BUGS) {
     spawnBugSwarm();
   }
 
   // Spawn more caravans periodically
-  if (gameTick % 500 === 0 && caravans.length < 5) {
+  if (gameTick % CARAVAN_SPAWN_INTERVAL === 0 && caravans.length < MAX_CARAVANS) {
     spawnCaravan();
   }
 
   // Cull far-away entities
-  bugs = bugs.filter(function(b) { return dist(player, b) < 2000; });
+  bugs = bugs.filter(function(b) { return dist(player, b) < ENTITY_CULL_DISTANCE; });
 
   // Player death
   if (player.hp <= 0) {
@@ -625,7 +629,7 @@ function updatePlay() {
 
   // Status
   if (state === 'play') {
-    var devDist = devourerMan ? Math.floor(dist(player, devourerMan)) : '???';
+    const devDist = devourerMan ? Math.floor(dist(player, devourerMan)) : '???';
     statusEl.textContent =
       '🌊 Волна ' + wave + ' | ☠️ Убито: ' + totalKills +
       ' | 💰 Лут: ' + player.loot +
@@ -672,12 +676,12 @@ function draw() {
 function drawGrid() {
   ctx.strokeStyle = '#ffffff08';
   ctx.lineWidth = 1;
-  var startX = Math.floor(cam.x / 40) * 40;
-  var startY = Math.floor(cam.y / 40) * 40;
-  for (var x = startX; x < cam.x + W + 40; x += 40) {
+  const startX = Math.floor(cam.x / 40) * 40;
+  const startY = Math.floor(cam.y / 40) * 40;
+  for (let x = startX; x < cam.x + W + 40; x += 40) {
     ctx.beginPath(); ctx.moveTo(x, cam.y); ctx.lineTo(x, cam.y + H); ctx.stroke();
   }
-  for (var y = startY; y < cam.y + H + 40; y += 40) {
+  for (let y = startY; y < cam.y + H + 40; y += 40) {
     ctx.beginPath(); ctx.moveTo(cam.x, y); ctx.lineTo(cam.x + W, y); ctx.stroke();
   }
 }
@@ -710,7 +714,7 @@ function drawDecorations() {
       // Grass tufts
       ctx.strokeStyle = 'hsl(' + d.hue + ',50%,35%)';
       ctx.lineWidth = 2;
-      for (var i = -1; i <= 1; i++) {
+      for (let i = -1; i <= 1; i++) {
         ctx.beginPath();
         ctx.moveTo(d.x + i * 4, d.y);
         ctx.lineTo(d.x + i * 6, d.y - d.size);
@@ -725,8 +729,8 @@ function drawCaravans() {
     if (!c.alive) return;
     // Draw each member
     c.members.forEach(function(m, idx) {
-      var mx = c.x - Math.cos(c.angle) * m.offsetX;
-      var my = c.y - Math.sin(c.angle) * m.offsetX + m.offsetY;
+      const mx = c.x - Math.cos(c.angle) * m.offsetX;
+      const my = c.y - Math.sin(c.angle) * m.offsetX + m.offsetY;
 
       // Body (brown box / pack animal)
       ctx.fillStyle = '#8d6e63';
@@ -741,7 +745,7 @@ function drawCaravans() {
       // Legs
       ctx.strokeStyle = '#5d4037';
       ctx.lineWidth = 3;
-      var legOff = Math.sin(gameTick * 0.1 + idx) * 4;
+      const legOff = Math.sin(gameTick * 0.1 + idx) * 4;
       ctx.beginPath();
       ctx.moveTo(mx - m.r * 0.4, my + m.r * 0.7);
       ctx.lineTo(mx - m.r * 0.4, my + m.r * 1.3 + legOff);
@@ -753,9 +757,9 @@ function drawCaravans() {
     });
 
     // HP bar
-    var bw = 40;
-    var bx = c.x - bw / 2;
-    var by = c.y - 30;
+    const bw = 40;
+    const bx = c.x - bw / 2;
+    const by = c.y - 30;
     ctx.fillStyle = '#333';
     ctx.fillRect(bx, by, bw, 4);
     ctx.fillStyle = '#f9a825';
@@ -787,7 +791,7 @@ function drawBugs() {
     ctx.stroke();
 
     // Eyes
-    var ea = b.aggro ? Math.atan2(player.y - b.y, player.x - b.x) : b.angle;
+    const ea = b.aggro ? Math.atan2(player.y - b.y, player.x - b.x) : b.angle;
     ctx.fillStyle = '#fff';
     ctx.beginPath();
     ctx.arc(b.x + Math.cos(ea - 0.4) * b.r * 0.5, b.y + Math.sin(ea - 0.4) * b.r * 0.5, 2.5, 0, Math.PI * 2);
@@ -799,10 +803,10 @@ function drawBugs() {
     // Legs
     ctx.strokeStyle = '#3e2723';
     ctx.lineWidth = 1.5;
-    for (var i = 0; i < 3; i++) {
-      var la = ea + Math.PI / 2 + i * 0.4 - 0.4;
-      var lb = ea - Math.PI / 2 - i * 0.4 + 0.4;
-      var legWobble = Math.sin(gameTick * 0.15 + i) * 3;
+    for (let i = 0; i < 3; i++) {
+      const la = ea + Math.PI / 2 + i * 0.4 - 0.4;
+      const lb = ea - Math.PI / 2 - i * 0.4 + 0.4;
+      const legWobble = Math.sin(gameTick * 0.15 + i) * 3;
       ctx.beginPath();
       ctx.moveTo(b.x + Math.cos(la) * b.r, b.y + Math.sin(la) * b.r);
       ctx.lineTo(b.x + Math.cos(la) * (b.r + 6) + legWobble, b.y + Math.sin(la) * (b.r + 6));
@@ -826,10 +830,10 @@ function drawBugs() {
 
 function drawWaveEnemies() {
   waveEnemies.forEach(function(p) {
-    var segCount = p.body.length;
-    for (var i = segCount - 1; i >= 0; i--) {
-      var seg = p.body[i];
-      var segR = p.r * (0.45 + 0.55 * (1 - i / segCount));
+    const segCount = p.body.length;
+    for (let i = segCount - 1; i >= 0; i--) {
+      const seg = p.body[i];
+      const segR = p.r * (0.45 + 0.55 * (1 - i / segCount));
       ctx.globalAlpha = 0.85;
       ctx.fillStyle = i === 0 ? darken(p.color, 20) : p.color;
       ctx.beginPath();
@@ -838,17 +842,17 @@ function drawWaveEnemies() {
     }
     ctx.globalAlpha = 1;
 
-    var ex = p.x + Math.cos(p.angle) * p.r * 0.5;
-    var ey = p.y + Math.sin(p.angle) * p.r * 0.5;
+    const ex = p.x + Math.cos(p.angle) * p.r * 0.5;
+    const ey = p.y + Math.sin(p.angle) * p.r * 0.5;
     ctx.fillStyle = '#fff';
     ctx.beginPath(); ctx.arc(ex, ey, p.r * 0.25, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#111';
     ctx.beginPath(); ctx.arc(ex + Math.cos(p.angle) * 1.5, ey + Math.sin(p.angle) * 1.5, p.r * 0.12, 0, Math.PI * 2); ctx.fill();
 
     if (p.maxHp > 1) {
-      var bw = p.r * 2.5;
-      var bx = p.x - bw / 2;
-      var by = p.y - p.r - 8;
+      const bw = p.r * 2.5;
+      const bx = p.x - bw / 2;
+      const by = p.y - p.r - 8;
       ctx.fillStyle = '#333';
       ctx.fillRect(bx, by, bw, 4);
       ctx.fillStyle = '#ef5350';
@@ -859,10 +863,10 @@ function drawWaveEnemies() {
 
 function drawDevourer() {
   if (!devourerMan) return;
-  var d = devourerMan;
+  const d = devourerMan;
 
   // Pulsing glow
-  var glow = Math.sin(gameTick * 0.05) * 5 + 10;
+  const glow = Math.sin(gameTick * 0.05) * 5 + 10;
   ctx.fillStyle = '#e040fb22';
   ctx.beginPath();
   ctx.arc(d.x, d.y, d.r + glow, 0, Math.PI * 2);
@@ -899,7 +903,7 @@ function drawDevourer() {
   ctx.strokeStyle = '#ffcc80';
   ctx.lineWidth = 5;
   ctx.lineCap = 'round';
-  var armSwing = Math.sin(gameTick * 0.06) * 15;
+  const armSwing = Math.sin(gameTick * 0.06) * 15;
   ctx.beginPath();
   ctx.moveTo(d.x - d.r, d.y);
   ctx.lineTo(d.x - d.r - 20, d.y - 10 + armSwing);
@@ -926,9 +930,9 @@ function drawDevourer() {
 }
 
 function drawPlayer() {
-  var x = player.x, y = player.y, r = player.r;
-  var hasHands = player.hasHands, hasLegs = player.hasLegs;
-  var attackCd = player.attackCd;
+  const x = player.x, y = player.y, r = player.r;
+  const hasHands = player.hasHands, hasLegs = player.hasLegs;
+  const attackCd = player.attackCd;
 
   // Attack ring
   if (attackCd > 0 && hasHands) {
@@ -946,7 +950,7 @@ function drawPlayer() {
     ctx.strokeStyle = '#42a5f5';
     ctx.lineWidth = 5;
     ctx.lineCap = 'round';
-    var legWobble = Math.sin(Date.now() / 150) * 5;
+    const legWobble = Math.sin(Date.now() / 150) * 5;
     ctx.beginPath();
     ctx.moveTo(x - r * 0.4, y + r * 0.7);
     ctx.lineTo(x - r * 0.6, y + r * 1.5 + legWobble);
@@ -971,7 +975,7 @@ function drawPlayer() {
   ctx.clip();
   ctx.strokeStyle = '#4caf5066';
   ctx.lineWidth = 4;
-  for (var i = -r; i <= r; i += 10) {
+  for (let i = -r; i <= r; i += 10) {
     ctx.beginPath();
     ctx.moveTo(x + i, y - r);
     ctx.lineTo(x + i, y + r);
@@ -986,7 +990,7 @@ function drawPlayer() {
 
   // Seeds
   ctx.fillStyle = '#1a1a1a';
-  var seeds = [[-0.25, -0.15], [0.2, -0.2], [0, 0.1], [-0.15, 0.25], [0.3, 0.15]];
+  const seeds = [[-0.25, -0.15], [0.2, -0.2], [0, 0.1], [-0.15, 0.25], [0.3, 0.15]];
   seeds.forEach(function(s) {
     ctx.beginPath();
     ctx.ellipse(x + s[0] * r, y + s[1] * r, r * 0.065, r * 0.13, s[0] * 1.2, 0, Math.PI * 2);
@@ -998,7 +1002,7 @@ function drawPlayer() {
     ctx.strokeStyle = '#ff7043';
     ctx.lineWidth = 5;
     ctx.lineCap = 'round';
-    var armSwing = Math.sin(Date.now() / 200) * 8;
+    const armSwing = Math.sin(Date.now() / 200) * 8;
     ctx.beginPath();
     ctx.moveTo(x - r * 0.85, y - r * 0.1);
     ctx.lineTo(x - r * 1.7, y - r * 0.3 + armSwing);
@@ -1056,11 +1060,11 @@ function drawHUD() {
   if (state === 'build') return;
 
   // HP bar
-  var bw = 200, bh = 14;
-  var bx = 10, by = 10;
+  const bw = 200, bh = 14;
+  const bx = 10, by = 10;
   ctx.fillStyle = '#333';
   ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill();
-  var hpRatio = player.hp / player.maxHp;
+  const hpRatio = player.hp / player.maxHp;
   ctx.fillStyle = hpRatio > 0.5 ? '#4caf50' : hpRatio > 0.25 ? '#ffc107' : '#ef5350';
   ctx.beginPath(); ctx.roundRect(bx, by, bw * hpRatio, bh, 6); ctx.fill();
   ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
@@ -1083,11 +1087,11 @@ function drawHUD() {
 
   // Compass to devourer
   if (devourerMan && state === 'play') {
-    var angle = Math.atan2(devourerMan.y - player.y, devourerMan.x - player.x);
-    var devDist = Math.floor(dist(player, devourerMan));
-    var compassX = W - 60;
-    var compassY = 70;
-    var compassR = 25;
+    const angle = Math.atan2(devourerMan.y - player.y, devourerMan.x - player.x);
+    const devDist = Math.floor(dist(player, devourerMan));
+    const compassX = W - 60;
+    const compassY = 70;
+    const compassR = 25;
 
     ctx.fillStyle = '#1a1a2ecc';
     ctx.beginPath();
@@ -1110,8 +1114,8 @@ function drawHUD() {
     // Arrowhead
     ctx.fillStyle = '#e040fb';
     ctx.beginPath();
-    var tipX = compassX + Math.cos(angle) * compassR;
-    var tipY = compassY + Math.sin(angle) * compassR;
+    const tipX = compassX + Math.cos(angle) * compassR;
+    const tipY = compassY + Math.sin(angle) * compassR;
     ctx.moveTo(tipX, tipY);
     ctx.lineTo(tipX + Math.cos(angle + 2.5) * 8, tipY + Math.sin(angle + 2.5) * 8);
     ctx.lineTo(tipX + Math.cos(angle - 2.5) * 8, tipY + Math.sin(angle - 2.5) * 8);
@@ -1138,9 +1142,9 @@ function drawHUD() {
 
 function drawMinimap() {
   if (state === 'build') return;
-  var mmW = 120, mmH = 90;
-  var mmX = 10, mmY = H - mmH - 30;
-  var mmScale = 0.02;
+  const mmW = 120, mmH = 90;
+  const mmX = 10, mmY = H - mmH - 30;
+  const mmScale = 0.02;
 
   ctx.fillStyle = '#0a0a1acc';
   ctx.fillRect(mmX, mmY, mmW, mmH);
@@ -1148,8 +1152,8 @@ function drawMinimap() {
   ctx.lineWidth = 1;
   ctx.strokeRect(mmX, mmY, mmW, mmH);
 
-  var cx = mmX + mmW / 2;
-  var cy = mmY + mmH / 2;
+  const cx = mmX + mmW / 2;
+  const cy = mmY + mmH / 2;
 
   // Player (center)
   ctx.fillStyle = '#4caf50';
@@ -1159,8 +1163,8 @@ function drawMinimap() {
 
   // Bugs
   bugs.forEach(function(b) {
-    var bx = cx + (b.x - player.x) * mmScale;
-    var by = cy + (b.y - player.y) * mmScale;
+    const bx = cx + (b.x - player.x) * mmScale;
+    const by = cy + (b.y - player.y) * mmScale;
     if (bx > mmX && bx < mmX + mmW && by > mmY && by < mmY + mmH) {
       ctx.fillStyle = b.aggro ? '#ff1744' : '#795548';
       ctx.fillRect(bx - 1, by - 1, 2, 2);
@@ -1169,8 +1173,8 @@ function drawMinimap() {
 
   // Caravans
   caravans.forEach(function(c) {
-    var bx = cx + (c.x - player.x) * mmScale;
-    var by = cy + (c.y - player.y) * mmScale;
+    const bx = cx + (c.x - player.x) * mmScale;
+    const by = cy + (c.y - player.y) * mmScale;
     if (bx > mmX && bx < mmX + mmW && by > mmY && by < mmY + mmH) {
       ctx.fillStyle = '#f9a825';
       ctx.fillRect(bx - 2, by - 2, 4, 4);
@@ -1179,8 +1183,8 @@ function drawMinimap() {
 
   // Wave enemies
   waveEnemies.forEach(function(e) {
-    var bx = cx + (e.x - player.x) * mmScale;
-    var by = cy + (e.y - player.y) * mmScale;
+    const bx = cx + (e.x - player.x) * mmScale;
+    const by = cy + (e.y - player.y) * mmScale;
     if (bx > mmX && bx < mmX + mmW && by > mmY && by < mmY + mmH) {
       ctx.fillStyle = '#66bb6a';
       ctx.fillRect(bx - 1, by - 1, 2, 2);
@@ -1189,8 +1193,8 @@ function drawMinimap() {
 
   // Devourer
   if (devourerMan) {
-    var dx = cx + (devourerMan.x - player.x) * mmScale;
-    var dy = cy + (devourerMan.y - player.y) * mmScale;
+    const dx = cx + (devourerMan.x - player.x) * mmScale;
+    const dy = cy + (devourerMan.y - player.y) * mmScale;
     dx = clamp(dx, mmX + 3, mmX + mmW - 3);
     dy = clamp(dy, mmY + 3, mmY + mmH - 3);
     ctx.fillStyle = '#e040fb';
