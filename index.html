@@ -94,6 +94,10 @@ let cutsceneData = null;
 let cutsceneIdx = 0;
 let cutsceneTimer = 0;
 let bossGate = false;
+let capturedTerritories = [];
+let passiveIncome = 0;
+let passiveTimer = 0;
+let cutsceneNextState = null; // state to transition to after cutscene
 
 // ============================================================
 //  UPGRADES STATE
@@ -951,12 +955,26 @@ function defeatBoss(){
   // unlock double jump after Act 1
   if(currentAct===1) doubleJumpUnlocked=true;
 
+  // capture territory
+  if(!capturedTerritories.includes(currentAct)){
+    capturedTerritories.push(currentAct);
+  }
+
   // transition to upgrade screen after delay
   setTimeout(()=>{
     if(currentAct<6){
       gs='upgrade';
     } else {
-      gs='victory';
+      // show final cutscene
+      gs='cutscene';
+      cutsceneData=[
+        {speaker:'АРБУЗИЛЛА',text:'Мир принадлежит мне. От бахчи до горизонта — всё зелено.'},
+        {speaker:'АРБУЗИЛЛА',text:'Но это лишь начало. Я слышу, что где-то далеко... существуют другие фрукты с таким же даром.'},
+        {speaker:'АРБУЗИЛЛА',text:'Дынная Империя на востоке. Тыквенный Альянс на севере.'},
+        {speaker:'АРБУЗИЛЛА',text:'Война за урожай только начинается.'},
+      ];
+      cutsceneIdx=0;
+      cutsceneNextState='victory';
     }
   }, 2000);
 }
@@ -2091,10 +2109,17 @@ function drawHUD(){
   X.fillText('Акт '+currentAct+': '+LEVELS[currentAct].name, CW-15, 28);
   X.textAlign='left';
 
+  // Captured territories
+  if(capturedTerritories.length>0){
+    X.fillStyle='#4caf5088'; X.font='10px Arial';
+    X.fillText('🌱 Захвачено: '+capturedTerritories.length+'/6 (+'+capturedTerritories.length*3+' семечек/5с)', bx, eby+64);
+  }
+
   // Mutations
   if(mutations.length>0){
     X.fillStyle='#ce93d8'; X.font='10px Arial';
-    X.fillText('Мутации: '+mutations.join(', '), bx, eby+64);
+    const mutY = capturedTerritories.length>0 ? eby+78 : eby+64;
+    X.fillText('Мутации: '+mutations.join(', '), bx, mutY);
   }
 
   // Enemy count
@@ -2162,7 +2187,8 @@ function advanceCutscene(){
   if(!cutsceneData||cutsceneIdx>=cutsceneData.length){
     cutsceneData=null;
     cutsceneIdx=0;
-    if(currentBoss && currentBoss.alive) gs='boss';
+    if(cutsceneNextState){ gs=cutsceneNextState; cutsceneNextState=null; }
+    else if(currentBoss && currentBoss.alive) gs='boss';
     else gs='play';
   }
 }
@@ -2239,10 +2265,20 @@ function drawUpgrade(){
   X.fillText('Следующий Акт ➜', CW/2, ny+32);
   upgradeNextBtn = {x:CW/2-100,y:ny,w:200,h:50};
 
+  // Territory info
+  let infoY = ny+70;
+  if(capturedTerritories.length>0){
+    X.fillStyle='#4caf50'; X.font='14px Arial';
+    X.fillText('🌱 Захваченные территории: '+capturedTerritories.map(a=>LEVELS[a].name).join(', '), CW/2, infoY);
+    X.fillStyle='#a5d6a7'; X.font='12px Arial';
+    X.fillText('Пассивный доход: +'+capturedTerritories.length*3+' семечек каждые 5 секунд', CW/2, infoY+22);
+    infoY+=50;
+  }
+
   // Mutations display
   if(mutations.length>0){
     X.fillStyle='#ce93d8'; X.font='14px Arial';
-    X.fillText('Мутации: '+mutations.join(', '), CW/2, ny+80);
+    X.fillText('Мутации: '+mutations.join(', '), CW/2, infoY);
   }
 
   X.textAlign='left';
@@ -2335,6 +2371,9 @@ document.getElementById('btn-start').addEventListener('click', ()=>{
   totalSeeds=0;
   doubleJumpUnlocked=false;
   mutations=[];
+  capturedTerritories=[];
+  passiveTimer=0;
+  cutsceneNextState=null;
   upgrades={hp:0,speed:0,damage:0,range:0,atkSpd:0};
   initPlayer();
   loadLevel(1);
@@ -2375,6 +2414,8 @@ function update(){
     checkBossTrigger();
     // clean dead enemies
     enemies=enemies.filter(e=>e.alive);
+    // passive income from captured territories
+    updatePassiveIncome();
   }
   if(gs==='boss'){
     updatePlayer();
@@ -2385,9 +2426,20 @@ function update(){
     updateDrops();
     updateCamera();
     enemies=enemies.filter(e=>e.alive);
+    updatePassiveIncome();
   }
   if(gs==='gameover'||gs==='victory'){
     updateParticles();
+  }
+}
+
+function updatePassiveIncome(){
+  if(capturedTerritories.length===0) return;
+  passiveTimer++;
+  if(passiveTimer>=300){ // every 5 seconds
+    passiveTimer=0;
+    passiveIncome=capturedTerritories.length*3;
+    totalSeeds+=passiveIncome;
   }
 }
 
