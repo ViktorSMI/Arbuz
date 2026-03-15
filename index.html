@@ -8,16 +8,17 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0a0a14;overflow:hidden;font-family:'Segoe UI',Arial,sans-serif}
 canvas{display:block;cursor:crosshair}
-#overlay{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;pointer-events:none}
+#overlay{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;pointer-events:none;background:radial-gradient(ellipse at center,#1a2e1a 0%,#0a0a14 70%)}
 #overlay.active{pointer-events:auto}
 #menu{display:none;text-align:center}
-#menu h1{font-size:3.5rem;color:#4caf50;text-shadow:0 0 30px #4caf5088;margin-bottom:10px}
-#menu h2{font-size:1.2rem;color:#ef5350;margin-bottom:30px;font-weight:normal}
-#menu button{display:block;margin:8px auto;padding:14px 40px;font-size:1.1rem;font-weight:bold;border:none;border-radius:8px;cursor:pointer;transition:transform .1s,box-shadow .1s;color:#fff}
-#menu button:hover{transform:scale(1.05);box-shadow:0 4px 20px #0008}
-#btn-start{background:#4caf50}
-#btn-controls{background:#2196f3}
-.controls-info{display:none;color:#ccc;font-size:.9rem;margin-top:12px;line-height:1.8;background:#1118;padding:16px 24px;border-radius:8px}
+#menu h1{font-size:4rem;color:#4caf50;text-shadow:0 0 40px #4caf5088,0 0 80px #4caf5044;margin-bottom:10px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+#menu h2{font-size:1.3rem;color:#ef5350;margin-bottom:35px;font-weight:normal;letter-spacing:2px}
+#menu button{display:block;margin:10px auto;padding:16px 50px;font-size:1.15rem;font-weight:bold;border:none;border-radius:10px;cursor:pointer;transition:transform .15s,box-shadow .15s;color:#fff;letter-spacing:1px}
+#menu button:hover{transform:scale(1.07);box-shadow:0 6px 25px #0008}
+#btn-start{background:linear-gradient(135deg,#4caf50,#2e7d32);font-size:1.3rem}
+#btn-controls{background:linear-gradient(135deg,#2196f3,#1565c0)}
+.controls-info{display:none;color:#ccc;font-size:.9rem;margin-top:12px;line-height:1.8;background:#1118;padding:16px 24px;border-radius:8px;text-align:left}
 </style>
 </head>
 <body>
@@ -277,6 +278,8 @@ function updatePlayer(){
     player.x+=player.dashVx;
     player.y+=player.dashVy;
     player.dashing--;
+    // dash trail
+    if(tick%2===0) spawnP(player.x,player.y,'#80deea',3,0.5,2,8,15,player.r*0.6,player.r*0.8);
     if(player.dashing===0) spawnP(player.x,player.y,'#80deea',8,2,5,10,20,3,6);
     resolveCollisions();
     return;
@@ -319,11 +322,13 @@ function updatePlayer(){
   }
 
   // dash
-  if((keys['ShiftLeft']||keys['ShiftRight'])&&player.dashCd<=0&&!player.grounded){
-    const aimX=mouseX+cam.x-player.x, aimY=mouseY+cam.y-player.y;
+  if((keys['ShiftLeft']||keys['ShiftRight'])&&player.dashCd<=0){
+    let aimX=mouseX+cam.x-player.x, aimY=mouseY+cam.y-player.y;
     const aimD=Math.hypot(aimX,aimY)||1;
-    player.dashVx=(aimX/aimD)*PLAYER_DASH;
-    player.dashVy=(aimY/aimD)*PLAYER_DASH;
+    if(player.grounded) aimY=0; // horizontal dash on ground
+    const nd=Math.hypot(aimX,aimY)||1;
+    player.dashVx=(aimX/nd)*PLAYER_DASH;
+    player.dashVy=(aimY/nd)*PLAYER_DASH;
     player.dashing=8;
     player.dashCd=DASH_CD;
     player.vy=0;
@@ -1929,7 +1934,9 @@ function drawDecorations(){
       case 'grass':
         X.strokeStyle='#4caf50'; X.lineWidth=2;
         for(let i=-8;i<=8;i+=4){
-          X.beginPath(); X.moveTo(sx+i,sy); X.lineTo(sx+i+rand(-3,3),sy-rand(8,16)); X.stroke();
+          const gh=10+((d.x+i*7)%8);
+          const goff=((d.x+i*13)%5)-2;
+          X.beginPath(); X.moveTo(sx+i,sy); X.lineTo(sx+i+goff,sy-gh); X.stroke();
         }
         break;
       case 'house':
@@ -1949,11 +1956,11 @@ function drawDecorations(){
         X.fillStyle='#795548'; X.fillRect(sx+5,sy-25,20,5);
         break;
       case 'building':
-        const bh=100+randi(0,60);
-        X.fillStyle='#455a64'; X.fillRect(sx,sy-bh,60,bh);
+        const bh2=100+(((d.x*7+13)%60)|0);
+        X.fillStyle='#455a64'; X.fillRect(sx,sy-bh2,60,bh2);
         X.fillStyle='#fff17644';
-        for(let r=0;r<bh-20;r+=25){
-          for(let c=0;c<2;c++) X.fillRect(sx+10+c*25,sy-bh+10+r,15,15);
+        for(let r2=0;r2<bh2-20;r2+=25){
+          for(let c=0;c<2;c++) X.fillRect(sx+10+c*25,sy-bh2+10+r2,15,15);
         }
         break;
       case 'factory':
@@ -2023,7 +2030,8 @@ function drawPlatforms(){
       // texture
       X.fillStyle = darkenColor(lvl.groundColor,8);
       for(let i=0;i<p.w;i+=20){
-        X.fillRect(sx+i+randi(0,5),sy+10+randi(0,10),3,3);
+        const hash=((p.x+i)*73+p.y*37)%17;
+        X.fillRect(sx+i+(hash%5),sy+10+(hash%10),3,3);
       }
     }
   }
@@ -2386,7 +2394,23 @@ function update(){
 function draw(){
   X.clearRect(0,0,CW,CH);
 
-  if(gs==='menu') return;
+  if(gs==='menu'){
+    // draw animated watermelon on canvas behind menu
+    X.fillStyle='#0a0a14'; X.fillRect(0,0,CW,CH);
+    // floating watermelons
+    for(let i=0;i<8;i++){
+      const mx=CW/2+Math.sin(tick*0.01+i*1.5)*CW*0.35;
+      const my=CH/2+Math.cos(tick*0.012+i*2)*CH*0.3;
+      const mr=20+Math.sin(tick*0.02+i)*5;
+      X.globalAlpha=0.15;
+      X.fillStyle='#388e3c';
+      X.beginPath(); X.arc(mx,my,mr,0,Math.PI*2); X.fill();
+      X.fillStyle='#e53935';
+      X.beginPath(); X.arc(mx,my,mr*0.7,0,Math.PI*2); X.fill();
+    }
+    X.globalAlpha=1;
+    return;
+  }
 
   X.save();
   X.translate(shakeX, shakeY);
