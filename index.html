@@ -1366,6 +1366,37 @@ function drawBoss(){
   if(!b||!b.alive) return;
   const sx=b.x-cam.x, sy=b.y-cam.y;
 
+  // telegraph warning indicators
+  if(b.state==='charge' && b.stateTimer>0){
+    // charge direction warning
+    X.fillStyle='#f4433644';
+    X.fillRect(sx,sy-5,b.facing*200,10);
+    X.fillStyle='#f44336'; X.font='bold 14px Arial'; X.textAlign='center';
+    X.fillText('⚠️',sx+b.facing*80,sy-15);
+    X.textAlign='left';
+  }
+  if(b.state==='swoop' && b.stateTimer>15){
+    // swoop target marker
+    const tx=(b.swoopTarget?.x||player.x)-cam.x, ty=(b.swoopTarget?.y||player.y)-cam.y;
+    X.strokeStyle='#f4433688'; X.lineWidth=2; X.setLineDash([5,5]);
+    X.beginPath(); X.arc(tx,ty,30,0,Math.PI*2); X.stroke();
+    X.setLineDash([]);
+  }
+  if(b.state==='slam' && b.stateTimer>20){
+    // ground impact warning
+    X.fillStyle='#ff980044';
+    X.fillRect(sx-60,sy+b.r,120,4);
+  }
+  if(b.state==='transition'){
+    // phase transition glow
+    const glow=Math.sin(tick*0.2)*10+20;
+    X.strokeStyle='#ff980088'; X.lineWidth=3;
+    X.beginPath(); X.arc(sx,sy,b.r+glow,0,Math.PI*2); X.stroke();
+    X.fillStyle='#fff'; X.font='bold 16px Arial'; X.textAlign='center';
+    X.fillText('ФАЗА '+(b.phase),sx,sy-b.r-20);
+    X.textAlign='left';
+  }
+
   // flash on hit
   if(b.flashTimer>0){
     X.fillStyle='#fff';
@@ -1550,6 +1581,7 @@ const LEVELS = {
       {type:'bug_soldier',x:2400,y:560,count:2},
       {type:'warrior_ant',x:2700,y:560},
       {type:'bug_soldier',x:3300,y:560,count:3},
+      {type:'mantis',x:3500,y:560},
       {type:'worker_ant',x:3600,y:560,count:5},
     ],
     boss: {type:'hrush', x:4550, y:450},
