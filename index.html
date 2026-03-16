@@ -19,6 +19,13 @@ canvas{display:block;cursor:crosshair}
 #btn-start{background:linear-gradient(135deg,#4caf50,#2e7d32);font-size:1.3rem}
 #btn-controls{background:linear-gradient(135deg,#2196f3,#1565c0)}
 .controls-info{display:none;color:#ccc;font-size:.9rem;margin-top:12px;line-height:1.8;background:#1118;padding:16px 24px;border-radius:8px;text-align:left}
+.diff-select{display:flex;gap:8px;justify-content:center;margin:12px auto 0;max-width:400px}
+.diff-select button{flex:1;padding:10px 8px;font-size:.85rem;letter-spacing:0;border:2px solid transparent}
+.diff-select button.active{border-color:#fff;box-shadow:0 0 12px #fff4}
+#diff-easy{background:linear-gradient(135deg,#66bb6a,#388e3c)}
+#diff-normal{background:linear-gradient(135deg,#ffa726,#ef6c00)}
+#diff-hard{background:linear-gradient(135deg,#ef5350,#b71c1c)}
+#diff-nightmare{background:linear-gradient(135deg,#9c27b0,#4a148c)}
 #btn-multi{background:linear-gradient(135deg,#9c27b0,#6a1b9a)}
 #multi-dialog{display:none;color:#ccc;font-size:.9rem;margin-top:12px;background:#1118;padding:16px 24px;border-radius:8px;text-align:left}
 #multi-dialog input{display:block;width:100%;margin:8px 0;padding:10px;font-size:1rem;border:1px solid #555;border-radius:6px;background:#222;color:#fff;outline:none;box-sizing:border-box}
@@ -36,6 +43,12 @@ canvas{display:block;cursor:crosshair}
 <h1>🍉 АРБУЗИЛЛА</h1>
 <h2>Watermelon World Conquest</h2>
 <button id="btn-start">Начать Завоевание</button>
+<div class="diff-select">
+<button id="diff-easy" onclick="setDifficulty(0)">Лёгкий</button>
+<button id="diff-normal" class="active" onclick="setDifficulty(1)">Нормальный</button>
+<button id="diff-hard" onclick="setDifficulty(2)">Сложный</button>
+<button id="diff-nightmare" onclick="setDifficulty(3)">Кошмар</button>
+</div>
 <button id="btn-controls" onclick="document.querySelector('.controls-info').style.display=document.querySelector('.controls-info').style.display==='block'?'none':'block'">Управление</button>
 <div class="controls-info">
 A/D или ←/→ — Движение<br>
@@ -86,16 +99,35 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
 //  CONSTANTS
 // ============================================================
 const GRAVITY = 0.55;
-const PLAYER_SPEED = 4.5;
-const PLAYER_JUMP = -13;
-const PLAYER_DASH = 18;
-const DASH_CD = 120;
+const PLAYER_SPEED = 3.2;
+const PLAYER_JUMP = -11;
+const PLAYER_DASH = 14;
+const DASH_CD = 150;
 const SEED_SPEED = 14;
 const SEED_FAN = 0.25;
 const CHARGE_MAX = 50;
 const ULT_COST = 100;
-const COYOTE = 6;
-const JUMP_BUF = 8;
+const COYOTE = 5;
+const JUMP_BUF = 7;
+
+// ============================================================
+//  DIFFICULTY
+// ============================================================
+let difficulty = 1; // 0=easy, 1=normal, 2=hard, 3=nightmare
+const DIFF_NAMES = ['Лёгкий','Нормальный','Сложный','Кошмар'];
+const DIFF_HP_MULT   = [0.6, 1.0, 1.6, 2.5];
+const DIFF_DMG_MULT  = [0.5, 1.0, 1.5, 2.2];
+const DIFF_SPD_MULT  = [0.8, 1.0, 1.2, 1.4];
+const DIFF_AGGRO     = [200, 280, 350, 450];
+const DIFF_BOSS_MULT = [0.7, 1.0, 1.5, 2.2];
+const DIFF_PLAYER_HP = [120, 100, 80, 60];
+
+function setDifficulty(d){
+  difficulty = d;
+  document.querySelectorAll('.diff-select button').forEach(b => b.classList.remove('active'));
+  const ids = ['diff-easy','diff-normal','diff-hard','diff-nightmare'];
+  document.getElementById(ids[d]).classList.add('active');
+}
 
 // ============================================================
 //  GAME STATE
@@ -408,7 +440,7 @@ let player;
 function initPlayer(){
   player = {
     x:200, y:400, vx:0, vy:0, w:44, h:44, r:22,
-    hp:100, maxHp:100+upgrades.hp*20,
+    hp:DIFF_PLAYER_HP[difficulty], maxHp:DIFF_PLAYER_HP[difficulty]+upgrades.hp*20,
     speed: PLAYER_SPEED+upgrades.speed*0.5,
     damage: 1+upgrades.damage*0.5,
     range: SEED_SPEED+upgrades.range*1,
@@ -497,8 +529,8 @@ function updatePlayer(){
   player.x+=player.vx;
   player.y+=player.vy;
 
-  // rotation (rolling)
-  player.rotation+=player.vx*0.04;
+  // rotation (disabled — watermelon doesn't roll visually)
+  // player.rotation+=player.vx*0.04;
 
   // attack cooldown
   if(player.atkCd>0) player.atkCd--;
@@ -563,6 +595,7 @@ function hurtPlayer(dmg){
   shake(10,6);
   spawnJuice(player.x,player.y);
   sfxHit();
+  addBiteMark();
   if(player.hp<=0){
     player.hp=0;
     player.alive=false;
@@ -573,52 +606,227 @@ function hurtPlayer(dmg){
   }
 }
 
+// ── Bite mark data (seeded once per damage) ──
+let biteMarks = [];
+function addBiteMark(){
+  const angle = rand(-Math.PI*0.8, Math.PI*0.8);
+  const size = rand(8, 14);
+  biteMarks.push({ angle, size, depth: rand(0.55, 0.85) });
+  if(biteMarks.length > 12) biteMarks.shift();
+}
+
+// ── Juice drip particles (floor drips) ──
+let juiceDrips = [];
+function updateJuiceDrips(){
+  const hpPct = player.hp / player.maxHp;
+  if(hpPct < 0.95 && player.alive){
+    const rate = hpPct < 0.3 ? 2 : hpPct < 0.6 ? 4 : 8;
+    if(tick % rate === 0){
+      const ox = rand(-player.r*0.5, player.r*0.5);
+      juiceDrips.push({
+        x: player.x + ox, y: player.y + player.r*0.6,
+        vx: rand(-0.3, 0.3), vy: rand(1, 2.5),
+        r: rand(1.5, 3.5), life: 120, maxLife: 120,
+        landed: false
+      });
+    }
+  }
+  for(let i = juiceDrips.length - 1; i >= 0; i--){
+    const d = juiceDrips[i];
+    if(!d.landed){
+      d.vy += 0.15;
+      d.x += d.vx; d.y += d.vy;
+      for(const p of currentPlatforms){
+        if(d.y + d.r > p.y && d.y - d.r < p.y + 5 && d.x > p.x && d.x < p.x + p.w && d.vy > 0){
+          d.y = p.y - d.r; d.vy = 0; d.landed = true; break;
+        }
+      }
+    } else {
+      d.life--;
+    }
+    if(d.life <= 0 || d.y > LEVELS[currentAct].height + 100) juiceDrips.splice(i, 1);
+  }
+}
+function drawJuiceDrips(){
+  for(const d of juiceDrips){
+    const dsx = d.x - cam.x, dsy = d.y - cam.y;
+    if(dsx < -10 || dsx > CW + 10 || dsy < -10 || dsy > CH + 10) continue;
+    X.globalAlpha = d.landed ? (d.life / d.maxLife) * 0.6 : 0.7;
+    X.fillStyle = d.landed ? '#c6282855' : '#ef5350';
+    if(d.landed){
+      X.beginPath(); X.ellipse(dsx, dsy, d.r * 1.8, d.r * 0.6, 0, 0, Math.PI * 2); X.fill();
+    } else {
+      X.beginPath(); X.arc(dsx, dsy, d.r, 0, Math.PI * 2); X.fill();
+    }
+  }
+  X.globalAlpha = 1;
+}
+
 function drawPlayer(){
   const sx=player.x-cam.x, sy=player.y-cam.y;
   if(player.invuln>0 && tick%4<2) return;
 
+  const R=player.r;
+  const hpPct=player.hp/player.maxHp;
+  const biteCount=Math.floor((1-hpPct)*biteMarks.length);
+
+  // ── Legs ──
+  const walkCycle=Math.sin(tick*0.18)*0.35*(Math.abs(player.vx)>0.5?1:0);
+  const legLen=R*0.7;
+  X.save();
+  X.translate(sx-R*0.3,sy+R*0.75);
+  X.rotate(walkCycle);
+  X.strokeStyle='#2e7d32'; X.lineWidth=5; X.lineCap='round';
+  X.beginPath(); X.moveTo(0,0); X.lineTo(0,legLen); X.stroke();
+  X.fillStyle='#1b5e20';
+  X.beginPath(); X.ellipse(2,legLen+3,7,5,0,0,Math.PI*2); X.fill();
+  X.restore();
+  X.save();
+  X.translate(sx+R*0.3,sy+R*0.75);
+  X.rotate(-walkCycle);
+  X.strokeStyle='#2e7d32'; X.lineWidth=5; X.lineCap='round';
+  X.beginPath(); X.moveTo(0,0); X.lineTo(0,legLen); X.stroke();
+  X.fillStyle='#1b5e20';
+  X.beginPath(); X.ellipse(2,legLen+3,7,5,0,0,Math.PI*2); X.fill();
+  X.restore();
+
+  // ── Body (no rotation) ──
   X.save();
   X.translate(sx,sy);
-  X.rotate(player.rotation);
 
-  // rind
+  // Draw bite wound interiors FIRST (behind the rind)
+  for(let i=0;i<biteCount&&i<biteMarks.length;i++){
+    const bm=biteMarks[i];
+    const bx=Math.cos(bm.angle)*R*bm.depth;
+    const by=Math.sin(bm.angle)*R*bm.depth;
+    X.save();
+    X.beginPath(); X.arc(0,0,R,0,Math.PI*2); X.clip();
+    // pink/red flesh background
+    X.fillStyle='#c62828';
+    X.beginPath(); X.arc(bx,by,bm.size+3,0,Math.PI*2); X.fill();
+    // lighter flesh center
+    X.fillStyle='#ef5350';
+    X.beginPath(); X.arc(bx,by,bm.size*0.7,0,Math.PI*2); X.fill();
+    // whitish rind layer ring
+    X.strokeStyle='#a5d6a7'; X.lineWidth=2.5;
+    X.beginPath(); X.arc(bx,by,bm.size+1,0,Math.PI*2); X.stroke();
+    // seeds in wound
+    X.fillStyle='#1a1a1a';
+    for(let j=0;j<3;j++){
+      const sa=j*2.1+bm.angle;
+      const sr=bm.size*0.35;
+      X.beginPath(); X.ellipse(bx+Math.cos(sa)*sr,by+Math.sin(sa)*sr,1.5,3.5,sa,0,Math.PI*2); X.fill();
+    }
+    X.restore();
+  }
+
+  // Draw rind with bite holes clipped out
+  X.save();
+  X.beginPath();
+  X.arc(0,0,R,0,Math.PI*2);
+  for(let i=0;i<biteCount&&i<biteMarks.length;i++){
+    const bm=biteMarks[i];
+    const bx=Math.cos(bm.angle)*R*bm.depth;
+    const by=Math.sin(bm.angle)*R*bm.depth;
+    X.moveTo(bx+bm.size,by);
+    X.arc(bx,by,bm.size,0,Math.PI*2,true);
+  }
+  X.clip('evenodd');
   X.fillStyle='#388e3c';
-  X.beginPath(); X.arc(0,0,player.r,0,Math.PI*2); X.fill();
-
-  // stripes
-  X.save(); X.beginPath(); X.arc(0,0,player.r,0,Math.PI*2); X.clip();
-  X.strokeStyle='#2e7d32'; X.lineWidth=4;
-  for(let i=-player.r;i<=player.r;i+=9){X.beginPath();X.moveTo(i,-player.r);X.lineTo(i,player.r);X.stroke();}
+  X.beginPath(); X.arc(0,0,R,0,Math.PI*2); X.fill();
+  X.strokeStyle='#2e7d32'; X.lineWidth=3.5;
+  for(let i=-R;i<=R;i+=8){X.beginPath();X.moveTo(i,-R);X.lineTo(i,R);X.stroke();}
+  X.strokeStyle='#4caf50'; X.lineWidth=2;
+  X.beginPath(); X.arc(0,0,R,0,Math.PI*2); X.stroke();
   X.restore();
 
-  // red interior (face area)
-  X.fillStyle='#e53935';
-  X.beginPath(); X.arc(0,0,player.r*0.72,0,Math.PI*2); X.fill();
+  // Juice streaks running down from bite wounds
+  if(hpPct<0.95){
+    for(let i=0;i<biteCount&&i<biteMarks.length;i++){
+      const bm=biteMarks[i];
+      const bx=Math.cos(bm.angle)*R*bm.depth;
+      const by=Math.sin(bm.angle)*R*bm.depth;
+      X.save();
+      X.beginPath(); X.arc(0,0,R+2,0,Math.PI*2); X.clip();
+      const streakLen=12+Math.sin(tick*0.06+i*2)*5;
+      X.strokeStyle='#ef535088'; X.lineWidth=2; X.lineCap='round';
+      X.beginPath(); X.moveTo(bx,by+bm.size*0.5);
+      X.quadraticCurveTo(bx+Math.sin(tick*0.04+i)*2,by+bm.size*0.5+streakLen*0.5,bx,by+bm.size*0.5+streakLen);
+      X.stroke();
+      X.restore();
+    }
+  }
 
-  // seeds on body
-  X.fillStyle='#1a1a1a';
-  const sd=[[-.25,-.15],[.2,-.2],[0,.1],[-.15,.25],[.3,.15]];
-  for(const s of sd){X.beginPath();X.ellipse(s[0]*player.r,s[1]*player.r,player.r*.06,player.r*.12,s[0],0,Math.PI*2);X.fill();}
+  // stem on top
+  X.strokeStyle='#33691e'; X.lineWidth=3; X.lineCap='round';
+  X.beginPath(); X.moveTo(0,-R+2); X.quadraticCurveTo(-4,-R-10,2,-R-14); X.stroke();
+  X.fillStyle='#66bb6a';
+  X.beginPath(); X.ellipse(-3,-R-8,6,3,-.5,0,Math.PI*2); X.fill();
 
   X.restore();
 
-  // eyes
-  X.fillStyle='#fff';
-  X.beginPath(); X.arc(sx-8,sy-8,6,0,Math.PI*2); X.fill();
-  X.beginPath(); X.arc(sx+8,sy-8,6,0,Math.PI*2); X.fill();
-
+  // ── Arms ──
   const aimA=Math.atan2(mouseY+cam.y-player.y,mouseX+cam.x-player.x);
-  X.fillStyle='#111';
-  X.beginPath(); X.arc(sx-8+Math.cos(aimA)*2,sy-8+Math.sin(aimA)*2,3,0,Math.PI*2); X.fill();
-  X.beginPath(); X.arc(sx+8+Math.cos(aimA)*2,sy-8+Math.sin(aimA)*2,3,0,Math.PI*2); X.fill();
+  const armSwing=Math.sin(tick*0.18)*0.25*(Math.abs(player.vx)>0.5?1:0);
 
-  // mouth
+  X.save();
+  X.translate(sx-player.facing*R*0.7,sy-R*0.1);
+  X.rotate(-player.facing*0.4+armSwing);
+  X.strokeStyle='#2e7d32'; X.lineWidth=5; X.lineCap='round';
+  X.beginPath(); X.moveTo(0,0); X.lineTo(0,R*0.65); X.stroke();
+  X.fillStyle='#fff';
+  X.beginPath(); X.arc(0,R*0.65+4,5,0,Math.PI*2); X.fill();
+  X.restore();
+
+  X.save();
+  X.translate(sx+player.facing*R*0.7,sy-R*0.1);
+  X.rotate(aimA*0.3+player.facing*0.2-armSwing);
+  X.strokeStyle='#2e7d32'; X.lineWidth=5; X.lineCap='round';
+  X.beginPath(); X.moveTo(0,0); X.lineTo(0,R*0.65); X.stroke();
+  X.fillStyle='#fff';
+  X.beginPath(); X.arc(0,R*0.65+4,5,0,Math.PI*2); X.fill();
+  X.restore();
+
+  // ── Face ──
+  X.fillStyle='#fff';
+  X.beginPath(); X.arc(sx-8,sy-8,7,0,Math.PI*2); X.fill();
+  X.beginPath(); X.arc(sx+8,sy-8,7,0,Math.PI*2); X.fill();
+  const eyeTrack=0.25;
+  X.fillStyle='#111';
+  X.beginPath(); X.arc(sx-8+Math.cos(aimA)*3*eyeTrack,sy-8+Math.sin(aimA)*3*eyeTrack,3.5,0,Math.PI*2); X.fill();
+  X.beginPath(); X.arc(sx+8+Math.cos(aimA)*3*eyeTrack,sy-8+Math.sin(aimA)*3*eyeTrack,3.5,0,Math.PI*2); X.fill();
+  X.fillStyle='#fff';
+  X.beginPath(); X.arc(sx-6,sy-10,1.5,0,Math.PI*2); X.fill();
+  X.beginPath(); X.arc(sx+10,sy-10,1.5,0,Math.PI*2); X.fill();
+
+  if(hpPct<0.4){
+    X.strokeStyle='#111'; X.lineWidth=2.5;
+    X.beginPath(); X.moveTo(sx-14,sy-16); X.lineTo(sx-4,sy-14); X.stroke();
+    X.beginPath(); X.moveTo(sx+14,sy-16); X.lineTo(sx+4,sy-14); X.stroke();
+  }
+
   if(player.alive){
     X.strokeStyle='#111'; X.lineWidth=2;
-    X.beginPath(); X.arc(sx,sy+5,7,0.2,Math.PI-0.2); X.stroke();
+    if(hpPct>0.6){
+      X.beginPath(); X.arc(sx,sy+5,7,0.2,Math.PI-0.2); X.stroke();
+    } else if(hpPct>0.3){
+      X.beginPath(); X.moveTo(sx-6,sy+7); X.lineTo(sx+6,sy+7); X.stroke();
+    } else {
+      X.beginPath(); X.arc(sx,sy+11,6,Math.PI+0.3,Math.PI*2-0.3); X.stroke();
+    }
   } else {
-    X.strokeStyle='#111'; X.lineWidth=2;
-    X.beginPath(); X.moveTo(sx-6,sy+8); X.quadraticCurveTo(sx,sy+3,sx+6,sy+8); X.stroke();
+    X.strokeStyle='#111'; X.lineWidth=2.5;
+    X.beginPath(); X.moveTo(sx-11,sy-11); X.lineTo(sx-5,sy-5); X.stroke();
+    X.beginPath(); X.moveTo(sx-5,sy-11); X.lineTo(sx-11,sy-5); X.stroke();
+    X.beginPath(); X.moveTo(sx+5,sy-11); X.lineTo(sx+11,sy-5); X.stroke();
+    X.beginPath(); X.moveTo(sx+11,sy-11); X.lineTo(sx+5,sy-5); X.stroke();
+    X.beginPath(); X.arc(sx,sy+11,5,Math.PI+0.3,Math.PI*2-0.3); X.stroke();
+  }
+
+  // dashing aura
+  if(player.dashing>0){
+    X.strokeStyle='#80deeaaa'; X.lineWidth=3;
+    X.beginPath(); X.arc(sx,sy,R+8,0,Math.PI*2); X.stroke();
   }
 
   // charge indicator
@@ -626,14 +834,14 @@ function drawPlayer(){
     const pct=Math.min(chargeTime/CHARGE_MAX,1);
     X.strokeStyle=`rgba(0,255,200,${0.3+pct*0.5})`;
     X.lineWidth=3;
-    X.beginPath(); X.arc(sx,sy,player.r+8+pct*10, -Math.PI/2, -Math.PI/2+pct*Math.PI*2); X.stroke();
+    X.beginPath(); X.arc(sx,sy,R+10+pct*10, -Math.PI/2, -Math.PI/2+pct*Math.PI*2); X.stroke();
   }
 
-  // energy bar (small, under player)
+  // energy bar (small, under feet)
   if(player.energy>0){
     const bw=30, bh=4;
-    X.fillStyle='#333'; X.fillRect(sx-bw/2,sy+player.r+6,bw,bh);
-    X.fillStyle='#ffab00'; X.fillRect(sx-bw/2,sy+player.r+6,bw*(player.energy/ULT_COST),bh);
+    X.fillStyle='#333'; X.fillRect(sx-bw/2,sy+R+legLen+12,bw,bh);
+    X.fillStyle='#ffab00'; X.fillRect(sx-bw/2,sy+R+legLen+12,bw*(player.energy/ULT_COST),bh);
   }
 }
 
@@ -780,36 +988,38 @@ let currentPlatforms = [];
 let currentBoss = null;
 
 const ENEMY_STATS = {
-  bug_soldier: {hp:4,r:16,speed:1.5,dmg:8,score:3,color:'#5d4037'},
-  worker_ant:  {hp:1,r:10,speed:2,dmg:4,score:1,color:'#3e2723'},
-  warrior_ant: {hp:6,r:20,speed:1.2,dmg:12,score:5,color:'#4a148c'},
-  cockroach:   {hp:2,r:12,speed:3.5,dmg:5,score:2,color:'#4e342e'},
-  wasp:        {hp:2,r:11,speed:2.5,dmg:7,score:3,color:'#fdd835',fly:true},
-  cat:         {hp:8,r:18,speed:2.8,dmg:10,score:5,color:'#ff8a65'},
-  pigeon:      {hp:3,r:13,speed:2,dmg:6,score:3,color:'#90a4ae',fly:true},
-  squirrel:    {hp:4,r:12,speed:3,dmg:8,score:4,color:'#a1887f'},
-  janitor:     {hp:6,r:18,speed:1.5,dmg:10,score:4,color:'#607d8b'},
-  gardener:    {hp:5,r:16,speed:1.8,dmg:9,score:4,color:'#66bb6a'},
-  robo_bug:    {hp:8,r:16,speed:1.5,dmg:12,score:6,color:'#78909c'},
-  toxic_slug:  {hp:5,r:14,speed:0.8,dmg:7,score:4,color:'#69f0ae'},
-  mutant_rat:  {hp:7,r:15,speed:2.5,dmg:11,score:5,color:'#ab47bc'},
-  soldier_net: {hp:8,r:18,speed:1.8,dmg:8,score:6,color:'#546e7a'},
-  soldier_cryo:{hp:8,r:18,speed:1.8,dmg:8,score:6,color:'#4fc3f7'},
-  chef:        {hp:7,r:17,speed:2,dmg:12,score:6,color:'#fafafa'},
-  ninja_waiter:{hp:5,r:15,speed:3.5,dmg:10,score:6,color:'#212121'},
-  sommelier:   {hp:6,r:16,speed:1.5,dmg:8,score:5,color:'#7b1fa2'},
-  worm:        {hp:3,r:14,speed:1,dmg:6,score:3,color:'#8d6e63'},
-  mantis:      {hp:10,r:20,speed:1.8,dmg:14,score:8,color:'#2e7d32'},
+  bug_soldier: {hp:6,r:16,speed:1.5,dmg:12,score:3,color:'#5d4037'},
+  worker_ant:  {hp:2,r:10,speed:1.8,dmg:6,score:1,color:'#3e2723'},
+  warrior_ant: {hp:8,r:20,speed:1.2,dmg:16,score:5,color:'#4a148c'},
+  cockroach:   {hp:3,r:12,speed:3,dmg:8,score:2,color:'#4e342e'},
+  wasp:        {hp:3,r:11,speed:2.2,dmg:10,score:3,color:'#fdd835',fly:true},
+  cat:         {hp:12,r:18,speed:2.5,dmg:14,score:5,color:'#ff8a65'},
+  pigeon:      {hp:4,r:13,speed:1.8,dmg:9,score:3,color:'#90a4ae',fly:true},
+  squirrel:    {hp:6,r:12,speed:2.8,dmg:10,score:4,color:'#a1887f'},
+  janitor:     {hp:10,r:18,speed:1.4,dmg:14,score:4,color:'#607d8b'},
+  gardener:    {hp:8,r:16,speed:1.6,dmg:12,score:4,color:'#66bb6a'},
+  robo_bug:    {hp:12,r:16,speed:1.4,dmg:16,score:6,color:'#78909c'},
+  toxic_slug:  {hp:8,r:14,speed:0.7,dmg:10,score:4,color:'#69f0ae'},
+  mutant_rat:  {hp:10,r:15,speed:2.2,dmg:14,score:5,color:'#ab47bc'},
+  soldier_net: {hp:12,r:18,speed:1.6,dmg:12,score:6,color:'#546e7a'},
+  soldier_cryo:{hp:12,r:18,speed:1.6,dmg:12,score:6,color:'#4fc3f7'},
+  chef:        {hp:10,r:17,speed:1.8,dmg:16,score:6,color:'#fafafa'},
+  ninja_waiter:{hp:8,r:15,speed:3,dmg:14,score:6,color:'#212121'},
+  sommelier:   {hp:9,r:16,speed:1.4,dmg:12,score:5,color:'#7b1fa2'},
+  worm:        {hp:5,r:14,speed:0.9,dmg:8,score:3,color:'#8d6e63'},
+  mantis:      {hp:16,r:20,speed:1.6,dmg:18,score:8,color:'#2e7d32'},
 };
 
 function createEnemy(type,x,y){
   const s=ENEMY_STATS[type];
+  const hm=DIFF_HP_MULT[difficulty], dm=DIFF_DMG_MULT[difficulty], sm=DIFF_SPD_MULT[difficulty];
   return {
     type, x, y, vx:0, vy:0, w:s.r*2, h:s.r*2, r:s.r,
-    hp:s.hp, maxHp:s.hp, speed:s.speed, dmg:s.dmg, score:s.score,
+    hp:Math.ceil(s.hp*hm), maxHp:Math.ceil(s.hp*hm),
+    speed:s.speed*sm, dmg:Math.ceil(s.dmg*dm), score:s.score,
     color:s.color, fly:s.fly||false,
     alive:true, facing:Math.random()<0.5?-1:1,
-    atkCd:0, aggroRange:250, aggro:false,
+    atkCd:0, aggroRange:DIFF_AGGRO[difficulty], aggro:false,
     patrolX:x, patrolRange:100+rand(0,100),
     stateTimer:0, state:'patrol', stunTimer:0
   };
@@ -1145,9 +1355,10 @@ const BOSS_DATA = {
 
 function createBoss(type,x,y){
   const d=BOSS_DATA[type];
+  const bm=DIFF_BOSS_MULT[difficulty];
   return {
     type,x,y,vx:0,vy:0,r:d.r,
-    hp:d.hp,maxHp:d.hp,color:d.color,name:d.name,
+    hp:Math.ceil(d.hp*bm),maxHp:Math.ceil(d.hp*bm),color:d.color,name:d.name,
     phase:1,maxPhase:d.phases,
     alive:true,facing:-1,
     atkCd:0,stateTimer:0,state:'idle',
@@ -2158,6 +2369,8 @@ function loadLevel(act){
   projectiles = [];
   particles = [];
   drops = [];
+  biteMarks = [];
+  juiceDrips = [];
 
   player.x = 200;
   player.y = 400;
@@ -2942,6 +3155,7 @@ function update(){
     enemies=enemies.filter(e=>e.alive);
     // passive income from captured territories
     updatePassiveIncome();
+    updateJuiceDrips();
     updateRemotePlayers();
     if(tick%3===0) netSendState();
   }
@@ -2955,6 +3169,7 @@ function update(){
     updateCamera();
     enemies=enemies.filter(e=>e.alive);
     updatePassiveIncome();
+    updateJuiceDrips();
     updateRemotePlayers();
     if(tick%3===0) netSendState();
   }
@@ -3005,6 +3220,7 @@ function draw(){
   drawDecorations();
   drawPlatforms();
   drawDrops();
+  drawJuiceDrips();
   drawEnemies();
   if(gs==='boss'||currentBoss) drawBoss();
   drawProjectiles();
