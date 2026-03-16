@@ -19,6 +19,14 @@ canvas{display:block;cursor:crosshair}
 #btn-start{background:linear-gradient(135deg,#4caf50,#2e7d32);font-size:1.3rem}
 #btn-controls{background:linear-gradient(135deg,#2196f3,#1565c0)}
 .controls-info{display:none;color:#ccc;font-size:.9rem;margin-top:12px;line-height:1.8;background:#1118;padding:16px 24px;border-radius:8px;text-align:left}
+#btn-multi{background:linear-gradient(135deg,#9c27b0,#6a1b9a)}
+#multi-dialog{display:none;color:#ccc;font-size:.9rem;margin-top:12px;background:#1118;padding:16px 24px;border-radius:8px;text-align:left}
+#multi-dialog input{display:block;width:100%;margin:8px 0;padding:10px;font-size:1rem;border:1px solid #555;border-radius:6px;background:#222;color:#fff;outline:none;box-sizing:border-box}
+#multi-dialog input:focus{border-color:#9c27b0}
+#multi-dialog button{padding:10px 20px;font-size:.95rem;width:100%}
+#btn-connect{background:linear-gradient(135deg,#4caf50,#2e7d32)}
+#btn-disconnect{background:linear-gradient(135deg,#ef5350,#c62828)}
+#net-status{color:#4caf50;font-size:.85rem;margin-top:6px;min-height:20px}
 </style>
 </head>
 <body>
@@ -36,6 +44,15 @@ Shift — Дэш (рывок)<br>
 Клик мыши — Стрельба семечками<br>
 Зажать клик — Телекинетическая волна<br>
 E — Ультимативная способность (Арбузопад)
+</div>
+<button id="btn-multi" onclick="document.getElementById('multi-dialog').style.display=document.getElementById('multi-dialog').style.display==='block'?'none':'block'">Мультиплеер</button>
+<div id="multi-dialog">
+<input id="nick-input" type="text" placeholder="Ваш ник" value="Арбузилла" maxlength="16"/>
+<input id="ip-input" type="text" placeholder="Адрес сервера (IP:порт)" value="localhost:3456"/>
+<button id="btn-connect">Подключиться</button>
+<button id="btn-disconnect" style="display:none">Отключиться</button>
+<div id="net-status"></div>
+<p style="color:#888;font-size:.75rem;margin-top:8px">Хост запускает: npm install && node server.js</p>
 </div>
 </div>
 </div>
@@ -2693,6 +2710,220 @@ addEventListener('keydown', e=>{
 });
 
 // ============================================================
+//  MULTIPLAYER
+// ============================================================
+let netSocket = null;
+let netId = null;
+let netNick = 'Арбузилла';
+let remotePlayers = {};
+let netConnected = false;
+
+document.getElementById('btn-connect').addEventListener('click', () => {
+  const nick = document.getElementById('nick-input').value.trim().slice(0,16) || 'Арбузилла';
+  const addr = document.getElementById('ip-input').value.trim() || 'localhost:3456';
+  netNick = nick;
+  netConnectTo(addr);
+});
+
+document.getElementById('btn-disconnect').addEventListener('click', () => {
+  netDisconnect();
+});
+
+function netConnectTo(addr) {
+  if (netSocket) netDisconnect();
+  const url = 'ws://' + addr;
+  document.getElementById('net-status').textContent = 'Подключение...';
+  try {
+    netSocket = new WebSocket(url);
+  } catch(e) {
+    document.getElementById('net-status').textContent = 'Ошибка подключения';
+    return;
+  }
+
+  netSocket.onopen = () => {
+    netConnected = true;
+    document.getElementById('net-status').textContent = 'Подключено!';
+    document.getElementById('btn-connect').style.display = 'none';
+    document.getElementById('btn-disconnect').style.display = 'block';
+  };
+
+  netSocket.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch(err) { return; }
+    if (msg.type === 'id') {
+      netId = msg.id;
+    } else if (msg.type === 'player') {
+      if (!remotePlayers[msg.id]) remotePlayers[msg.id] = {};
+      const rp = remotePlayers[msg.id];
+      const d = msg.data;
+      rp._prevX = rp._targetX != null ? rp._targetX : d.x;
+      rp._prevY = rp._targetY != null ? rp._targetY : d.y;
+      rp._targetX = d.x;
+      rp._targetY = d.y;
+      rp._lerpT = 0;
+      rp._lastUpdate = Date.now();
+      rp.nick = d.nick; rp.act = d.act;
+      rp.hp = d.hp; rp.maxHp = d.maxHp;
+      rp.alive = d.alive; rp.facing = d.facing;
+      rp.rotation = d.rotation;
+      rp.dashing = d.dashing; rp.invuln = d.invuln;
+    } else if (msg.type === 'leave') {
+      delete remotePlayers[msg.id];
+    }
+    updateNetStatus();
+  };
+
+  netSocket.onclose = () => {
+    netConnected = false;
+    netSocket = null; netId = null;
+    remotePlayers = {};
+    document.getElementById('net-status').textContent = 'Отключено';
+    document.getElementById('btn-connect').style.display = 'block';
+    document.getElementById('btn-disconnect').style.display = 'none';
+  };
+
+  netSocket.onerror = () => {
+    document.getElementById('net-status').textContent = 'Ошибка соединения';
+  };
+}
+
+function netDisconnect() {
+  if (netSocket) { netSocket.close(); netSocket = null; }
+  netConnected = false; netId = null;
+  remotePlayers = {};
+  document.getElementById('net-status').textContent = '';
+  document.getElementById('btn-connect').style.display = 'block';
+  document.getElementById('btn-disconnect').style.display = 'none';
+}
+
+function updateNetStatus() {
+  const count = Object.keys(remotePlayers).length;
+  if (netConnected) {
+    document.getElementById('net-status').textContent = 'Онлайн: ' + (count + 1) + ' игрок(ов)';
+  }
+}
+
+function netSendState() {
+  if (!netSocket || netSocket.readyState !== WebSocket.OPEN) return;
+  netSocket.send(JSON.stringify({
+    type: 'state', nick: netNick, act: currentAct,
+    x: player.x, y: player.y,
+    hp: player.hp, maxHp: player.maxHp,
+    alive: player.alive, facing: player.facing,
+    rotation: player.rotation,
+    dashing: player.dashing > 0,
+    invuln: player.invuln > 0
+  }));
+}
+
+function updateRemotePlayers() {
+  const now = Date.now();
+  for (const id in remotePlayers) {
+    const rp = remotePlayers[id];
+    if (rp._lastUpdate && now - rp._lastUpdate > 5000) {
+      delete remotePlayers[id]; continue;
+    }
+    if (rp._targetX != null) {
+      rp._lerpT = Math.min(1, (rp._lerpT || 0) + 0.25);
+      rp.x = lerp(rp._prevX, rp._targetX, rp._lerpT);
+      rp.y = lerp(rp._prevY, rp._targetY, rp._lerpT);
+    }
+  }
+}
+
+function drawRemotePlayers() {
+  for (const id in remotePlayers) {
+    const rp = remotePlayers[id];
+    if (!rp || rp.act !== currentAct || !rp.alive || rp.x == null) continue;
+    const sx = rp.x - cam.x, sy = rp.y - cam.y;
+    if (sx < -60 || sx > CW + 60 || sy < -60 || sy > CH + 60) continue;
+
+    X.globalAlpha = rp.invuln ? 0.4 : 0.75;
+
+    X.save();
+    X.translate(sx, sy);
+    X.rotate(rp.rotation || 0);
+    X.fillStyle = '#66bb6a';
+    X.beginPath(); X.arc(0, 0, 22, 0, Math.PI * 2); X.fill();
+    X.save(); X.beginPath(); X.arc(0, 0, 22, 0, Math.PI * 2); X.clip();
+    X.strokeStyle = '#43a047'; X.lineWidth = 4;
+    for (let i = -22; i <= 22; i += 9) { X.beginPath(); X.moveTo(i, -22); X.lineTo(i, 22); X.stroke(); }
+    X.restore();
+    X.fillStyle = '#ef5350';
+    X.beginPath(); X.arc(0, 0, 16, 0, Math.PI * 2); X.fill();
+    X.fillStyle = '#1a1a1a';
+    const sd = [[-.25, -.15], [.2, -.2], [0, .1], [-.15, .25], [.3, .15]];
+    for (const s of sd) { X.beginPath(); X.ellipse(s[0] * 22, s[1] * 22, 1.3, 2.6, s[0], 0, Math.PI * 2); X.fill(); }
+    X.restore();
+
+    X.fillStyle = '#fff';
+    X.beginPath(); X.arc(sx - 8, sy - 8, 6, 0, Math.PI * 2); X.fill();
+    X.beginPath(); X.arc(sx + 8, sy - 8, 6, 0, Math.PI * 2); X.fill();
+    X.fillStyle = '#111';
+    X.beginPath(); X.arc(sx - 7, sy - 8, 3, 0, Math.PI * 2); X.fill();
+    X.beginPath(); X.arc(sx + 9, sy - 8, 3, 0, Math.PI * 2); X.fill();
+    X.strokeStyle = '#111'; X.lineWidth = 2;
+    X.beginPath(); X.arc(sx, sy + 5, 7, 0.2, Math.PI - 0.2); X.stroke();
+
+    if (rp.dashing) {
+      X.strokeStyle = '#80deea88'; X.lineWidth = 3;
+      X.beginPath(); X.arc(sx, sy, 28, 0, Math.PI * 2); X.stroke();
+    }
+
+    X.fillStyle = '#fff'; X.font = 'bold 12px Arial'; X.textAlign = 'center';
+    X.fillText(rp.nick || 'Player', sx, sy - 32);
+    const rpHpR = rp.maxHp > 0 ? rp.hp / rp.maxHp : 0;
+    const bw = 30;
+    X.fillStyle = '#333'; X.fillRect(sx - bw / 2, sy - 28, bw, 4);
+    X.fillStyle = rpHpR > 0.5 ? '#4caf50' : rpHpR > 0.25 ? '#ffc107' : '#ef5350';
+    X.fillRect(sx - bw / 2, sy - 28, bw * rpHpR, 4);
+    X.textAlign = 'left';
+
+    X.globalAlpha = 1;
+  }
+}
+
+function drawTeamHUD() {
+  if (!netConnected) return;
+  const teammates = Object.values(remotePlayers);
+  if (teammates.length === 0) return;
+
+  const panelW = 180;
+  const lineH = 35;
+  const panelH = 30 + (teammates.length + 1) * lineH;
+  const px = CW - panelW - 15;
+  const py = 70;
+
+  X.fillStyle = '#1a1a2ecc';
+  X.beginPath(); X.roundRect(px, py, panelW, panelH, 8); X.fill();
+  X.strokeStyle = '#4caf5088'; X.lineWidth = 1;
+  X.beginPath(); X.roundRect(px, py, panelW, panelH, 8); X.stroke();
+
+  X.fillStyle = '#4caf50'; X.font = 'bold 12px Arial'; X.textAlign = 'center';
+  X.fillText('КОМАНДА', px + panelW / 2, py + 18);
+  X.textAlign = 'left';
+
+  let i = 0;
+  const drawMember = (nick, hp, maxHp, alive, isLocal) => {
+    const ly = py + 28 + i * lineH;
+    X.fillStyle = isLocal ? '#4caf50' : (alive ? '#80cbc4' : '#ef5350');
+    X.font = 'bold 11px Arial';
+    X.fillText('\uD83C\uDF49 ' + nick + (isLocal ? ' (Вы)' : ''), px + 8, ly + 12);
+    const hpR = maxHp > 0 ? hp / maxHp : 0;
+    X.fillStyle = '#333'; X.fillRect(px + 8, ly + 18, panelW - 16, 5);
+    X.fillStyle = hpR > 0.5 ? '#4caf50' : hpR > 0.25 ? '#ffc107' : '#ef5350';
+    X.fillRect(px + 8, ly + 18, (panelW - 16) * hpR, 5);
+    if (!alive) { X.fillStyle = '#ef5350'; X.font = '9px Arial'; X.fillText('МЕРТВ', px + panelW - 45, ly + 12); }
+    i++;
+  };
+
+  drawMember(netNick, player.hp, player.maxHp, player.alive, true);
+  for (const rp of teammates) {
+    drawMember(rp.nick || 'Player', rp.hp || 0, rp.maxHp || 100, rp.alive !== false, false);
+  }
+}
+
+// ============================================================
 //  MAIN GAME LOOP
 // ============================================================
 function update(){
@@ -2711,6 +2942,8 @@ function update(){
     enemies=enemies.filter(e=>e.alive);
     // passive income from captured territories
     updatePassiveIncome();
+    updateRemotePlayers();
+    if(tick%3===0) netSendState();
   }
   if(gs==='boss'){
     updatePlayer();
@@ -2722,6 +2955,8 @@ function update(){
     updateCamera();
     enemies=enemies.filter(e=>e.alive);
     updatePassiveIncome();
+    updateRemotePlayers();
+    if(tick%3===0) netSendState();
   }
   if(gs==='gameover'||gs==='victory'){
     updateParticles();
@@ -2774,11 +3009,13 @@ function draw(){
   if(gs==='boss'||currentBoss) drawBoss();
   drawProjectiles();
   drawPlayer();
+  drawRemotePlayers();
   drawParticles();
 
   X.restore();
 
   drawHUD();
+  drawTeamHUD();
 
   X.restore();
 
