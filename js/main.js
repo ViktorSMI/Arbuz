@@ -58,6 +58,7 @@ document.getElementById('btn-respawn').addEventListener('click', () => {
   player.pos.set(0, getTerrainHeight(0, 0), 0);
   player.vel.set(0, 0, 0);
   resetBoss();
+  switchToExploreMusic();
   renderer.domElement.requestPointerLock();
 });
 
@@ -383,14 +384,31 @@ function update() {
 
   if (player.dodging) {
     player.dodgeRollAngle += dt * 18;
-    playerMesh.rotation.set(0, player.yaw + Math.PI, 0);
+    const dodgeYaw = Math.atan2(player.dodgeDir.x, player.dodgeDir.z);
+    playerMesh.rotation.set(0, dodgeYaw, 0);
     playerMesh.rotateOnAxis(new THREE.Vector3(1, 0, 0), player.dodgeRollAngle);
+    playerMesh.userData.armL.rotation.set(1.8, 0, 0.3);
+    playerMesh.userData.armR.rotation.set(1.8, 0, -0.3);
+    playerMesh.userData.legL.rotation.x = 1.5;
+    playerMesh.userData.legR.rotation.x = 1.5;
+    playerMesh.userData.sword.visible = false;
   } else {
     player.dodgeRollAngle = 0;
     playerMesh.rotation.set(0, player.yaw + Math.PI, 0);
+    if (!playerMesh.userData.sword.visible) playerMesh.userData.sword.visible = true;
   }
 
-  if (moving && player.grounded && !player.dodging) {
+  if (inWater && !player.dodging) {
+    player.animTime += dt * 4;
+    const sw = Math.sin(player.animTime);
+    playerMesh.userData.armL.rotation.x = sw * 1.2;
+    playerMesh.userData.armR.rotation.x = -sw * 1.2;
+    playerMesh.userData.armL.rotation.z = 0.8 + Math.abs(sw) * 0.3;
+    playerMesh.userData.armR.rotation.z = -0.8 - Math.abs(sw) * 0.3;
+    playerMesh.userData.legL.rotation.x = -sw * 0.5;
+    playerMesh.userData.legR.rotation.x = sw * 0.5;
+    playerMesh.rotation.x = 0.25;
+  } else if (moving && player.grounded && !player.dodging) {
     player.animTime += dt * (sprinting ? 14 : 10);
     const legSwing = Math.sin(player.animTime) * 0.4;
     playerMesh.userData.legL.rotation.x = legSwing;
@@ -416,7 +434,7 @@ function update() {
   }
 
   if (player.dodging) {
-    playerMesh.scale.set(1, 0.7, 1);
+    playerMesh.scale.set(1, 1, 1);
   } else {
     playerMesh.scale.x += (1 - playerMesh.scale.x) * 0.2;
     playerMesh.scale.y += (1 - playerMesh.scale.y) * 0.2;

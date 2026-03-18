@@ -3,6 +3,9 @@ export const pointer = { locked: false };
 export const keys = {};
 export const keysJustPressed = {};
 export const lockOn = { toggled: false };
+export const touch = { active: false };
+
+const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
 document.addEventListener('keydown', e => {
   if (!keys[e.code]) keysJustPressed[e.code] = true;
@@ -26,3 +29,41 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('wheel', e => {
   if (pointer.locked) { e.preventDefault(); lockOn.toggled = true; }
 }, { passive: false });
+
+if (isMobile) {
+  touch.active = true;
+  pointer.locked = true;
+
+  let camTouchId = null;
+  let lastCamX = 0, lastCamY = 0;
+
+  const halfW = () => window.innerWidth / 2;
+
+  document.addEventListener('touchstart', e => {
+    for (const t of e.changedTouches) {
+      if (t.clientX > halfW() && camTouchId === null) {
+        camTouchId = t.identifier;
+        lastCamX = t.clientX;
+        lastCamY = t.clientY;
+      }
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier === camTouchId) {
+        mouse.dx += (t.clientX - lastCamX) * 1.5;
+        mouse.dy += (t.clientY - lastCamY) * 1.5;
+        lastCamX = t.clientX;
+        lastCamY = t.clientY;
+      }
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === camTouchId) camTouchId = null;
+    }
+  });
+}
