@@ -216,7 +216,7 @@ export function interactNpc(npc, bossDefeated, killsBefore) {
       npc.questComplete = true;
       q.done = true;
       applyReward(q.reward);
-      return { text: npc.def.completeDialogue, done: true };
+      return { text: npc.def.completeDialogue, done: true, reward: REWARD_LABELS[q.reward] };
     }
     return { text: npc.def.progressDialogue + ' (' + q.progress + '/' + q.target + ')', done: false };
   }
@@ -226,7 +226,7 @@ export function interactNpc(npc, bossDefeated, killsBefore) {
       npc.questComplete = true;
       q.done = true;
       applyReward(q.reward);
-      return { text: npc.def.completeDialogue, done: true };
+      return { text: npc.def.completeDialogue, done: true, reward: REWARD_LABELS[q.reward] };
     }
     return { text: npc.def.progressDialogue + ' (' + player.seeds + '/' + q.target + ')', done: false };
   }
@@ -235,12 +235,19 @@ export function interactNpc(npc, bossDefeated, killsBefore) {
       npc.questComplete = true;
       q.done = true;
       applyReward(q.reward);
-      return { text: npc.def.completeDialogue, done: true };
+      return { text: npc.def.completeDialogue, done: true, reward: REWARD_LABELS[q.reward] };
     }
     return { text: npc.def.progressDialogue, done: false };
   }
   return { text: '...', done: false };
 }
+
+const REWARD_LABELS = {
+  hp: '❤️ +25 Макс. здоровье, +50 HP',
+  stamina: '💪 +20 Макс. стамина, +40 стамины',
+  damage: '⚔️ +1 Уровень урона',
+  speed: '👟 +0.5 Скорость',
+};
 
 function applyReward(reward) {
   if (reward === 'hp') {

@@ -39,6 +39,7 @@ const npcPrompt = document.getElementById('npc-prompt');
 const npcDialogueEl = document.getElementById('npc-dialogue');
 const npcDialogueName = document.getElementById('npc-dialogue-name');
 const npcDialogueText = document.getElementById('npc-dialogue-text');
+const npcRewardEl = document.getElementById('npc-reward');
 
 const slashGeo = new THREE.TorusGeometry(1.5, 0.08, 4, 16, Math.PI * 0.6);
 const slashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
@@ -356,11 +357,19 @@ function update() {
         const result = interactNpc(dialogueNpc, bossState.bossDefeated);
         if (result.done || (dialogueNpc.dialogueIndex >= dialogueNpc.def.dialogue.length && dialogueNpc.questAccepted)) {
           npcDialogueText.textContent = result.text;
+          if (result.reward) {
+            npcRewardEl.textContent = result.reward;
+            npcRewardEl.style.display = 'block';
+            spawnParticles(player.pos.clone().setY(player.pos.y + 1.5), 0x4caf50, 20, 8);
+          } else {
+            npcRewardEl.style.display = 'none';
+          }
           setTimeout(() => {
             dialogueOpen = false;
             dialogueNpc = null;
             npcDialogueEl.style.display = 'none';
-          }, 1500);
+            npcRewardEl.style.display = 'none';
+          }, 2500);
         } else {
           npcDialogueText.textContent = result.text;
         }
@@ -380,6 +389,7 @@ function update() {
       npcDialogueName.textContent = nearNpc.def.name;
       npcDialogueText.textContent = result.text;
       npcDialogueEl.style.display = 'block';
+      npcRewardEl.style.display = 'none';
     }
   } else {
     npcPrompt.style.display = 'none';
