@@ -173,6 +173,9 @@ export const player = {
   blockDmgReduction: 0.6,
   equipment: { sword: 'basic', armor: 'none' },
   inventory: [],
+  reputation: 0,
+  foundLore: [],
+  ngPlus: 0,
 };
 
 export const camState = {

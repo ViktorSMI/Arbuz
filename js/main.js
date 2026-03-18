@@ -34,6 +34,10 @@ import { setMusicVolume, setSfxVolume, sfxBlock, sfxParry, sfxEquip } from './mu
 import { ambientLight, hemiLight } from './scene.js';
 import { terrainMat } from './terrain.js';
 import { grassMat, leafMats, skyMat, sunMesh, waterMat } from './world.js';
+import { updateCompanions, clearCompanions, companions, companionCount } from './companions.js';
+import { spawnCaravans, updateCaravans, clearCaravans, getNearestCaravan, raidCaravan, getCaravanGoods, buyFromCaravan } from './caravans.js';
+import { spawnLoreItems, updateLoreItems, clearLoreItems, getFoundLoreCount } from './lore.js';
+import { canSteal, attemptSteal, showStealResult } from './stealing.js';
 
 // Инициализация post-processing
 const composer = initPostProcessing(renderer, scene, camera);
@@ -48,6 +52,12 @@ const dayNightRefs = { sunLight, ambientLight, hemiLight, scene, sunMesh, baseFo
 
 spawnEnemies(0);
 spawnNpcs();
+spawnCaravans(0);
+spawnLoreItems(0);
+
+let shopOpen = false;
+let activeCaravan = null;
+let loreOpen = false;
 
 let gameStarted = false;
 let settingsOpen = false;
@@ -559,6 +569,85 @@ function update() {
     npcPrompt.style.display = 'none';
   }
 
+  // Взаимодействие с караваном
+  const nearCaravan = getNearestCaravan();
+  const caravanPrompt = document.getElementById('caravan-prompt');
+  if (nearCaravan && !dialogueOpen && !shopOpen) {
+    if (caravanPrompt) caravanPrompt.style.display = 'block';
+    if (keysJustPressed['KeyE']) {
+      // Торговля
+      shopOpen = true;
+      activeCaravan = nearCaravan;
+      const shopPanel = document.getElementById('shop-panel');
+      const shopItems = document.getElementById('shop-items');
+      const shopSeeds = document.getElementById('shop-seeds');
+      if (shopPanel && shopItems) {
+        const goods = getCaravanGoods(nearCaravan);
+        shopItems.innerHTML = goods.map((g, i) =>
+          `<div style="padding:8px 12px;border:1px solid #ff8f00;border-radius:8px;cursor:pointer;color:#fff;display:flex;justify-content:space-between" data-shop="${i}">
+            <span>${g.name}</span><span style="color:#fdd835">${g.price} 🌰</span>
+          </div>`
+        ).join('');
+        shopItems.querySelectorAll('[data-shop]').forEach(el => {
+          el.addEventListener('click', () => {
+            const idx = parseInt(el.dataset.shop);
+            const result = buyFromCaravan(activeCaravan, idx);
+            if (result) {
+              el.style.opacity = '0.3';
+              el.style.pointerEvents = 'none';
+              if (shopSeeds) shopSeeds.textContent = '🌰 Семечки: ' + player.seeds;
+            }
+          });
+        });
+        if (shopSeeds) shopSeeds.textContent = '🌰 Семечки: ' + player.seeds;
+        shopPanel.style.display = 'flex';
+        document.exitPointerLock();
+      }
+    }
+    if (keysJustPressed['KeyX']) {
+      // Ограбление!
+      raidCaravan(nearCaravan);
+      if (caravanPrompt) caravanPrompt.style.display = 'none';
+    }
+  } else {
+    if (caravanPrompt) caravanPrompt.style.display = 'none';
+  }
+
+  // Закрытие магазина
+  if (shopOpen && (keysJustPressed['Escape'] || keysJustPressed['KeyE'])) {
+    document.getElementById('shop-panel').style.display = 'none';
+    shopOpen = false;
+    activeCaravan = null;
+    if (!touch.active) renderer.domElement.requestPointerLock();
+  }
+
+  // Воровство — F рядом с НПС (не в диалоге)
+  if (keysJustPressed['KeyV'] && !dialogueOpen && !shopOpen) {
+    const nearNpc2 = getNearestNpc();
+    if (nearNpc2 && canSteal(nearNpc2)) {
+      const result = attemptSteal(nearNpc2);
+      showStealResult(result);
+    }
+  }
+
+  // Репутация на HUD
+  const repDisplay = document.getElementById('reputation-display');
+  if (repDisplay) {
+    const rep = player.reputation || 0;
+    const repText = rep > 20 ? '😇 Герой' : rep > 0 ? '🙂 Уважаем' : rep > -20 ? '😐 Нейтрал' : rep > -50 ? '😠 Подозрителен' : '💀 Разыскивается';
+    repDisplay.textContent = `Репутация: ${rep} ${repText}`;
+  }
+
+  // Компаньоны на HUD
+  const compStatus = document.getElementById('companion-status');
+  if (compStatus && companions.length > 0) {
+    compStatus.innerHTML = companions.map(c =>
+      `👤 ${c.name}: <span style="color:${c.hp > c.maxHp * 0.3 ? '#4caf50' : '#ff1744'}">${Math.round(c.hp)}/${c.maxHp}</span>`
+    ).join('<br>');
+  } else if (compStatus) {
+    compStatus.textContent = '';
+  }
+
   for (const k in keysJustPressed) delete keysJustPressed[k];
 
   const bossDistCheck = Math.sqrt((player.pos.x - BOSS_ARENA_POS.x) ** 2 + (player.pos.z - BOSS_ARENA_POS.z) ** 2);
@@ -618,6 +707,10 @@ function update() {
         clearHazards();
         clearLootDrops();
         clearSkillEntities();
+        clearCaravans();
+        clearLoreItems();
+        spawnCaravans(gameLocation - 1);
+        spawnLoreItems(gameLocation - 1);
         clearDamageNumbers();
         bossState.bossDefeated = false;
         portalPrompt.style.display = 'none';
@@ -660,6 +753,9 @@ function update() {
   updateProjectiles(dt);
   updateHazards(dt);
   updateLootDrops(dt);
+  updateCompanions(dt);
+  updateCaravans(dt);
+  updateLoreItems(dt);
   updateDamageNumbers(dt);
 
   targetShowTimer = Math.max(0, targetShowTimer - dt);
