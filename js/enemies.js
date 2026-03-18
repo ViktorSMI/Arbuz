@@ -171,6 +171,7 @@ export function spawnEnemies() {
       patrolX: x, patrolZ: z,
       atkCd: 0, aggroRange: 18,
       stunTimer: 0, flashTimer: 0,
+      atkAnim: 0, atkLunge: 0,
     });
   }
 }
@@ -242,10 +243,16 @@ export function updateEnemyAI(dt) {
       moving = true;
 
       if (dist < e.type.r + 1.5 && e.atkCd <= 0) {
+        e.atkAnim = 0.35;
+        const lungeX = (dx / dist) * 2;
+        const lungeZ = (dz / dist) * 2;
+        e.vel.x += lungeX;
+        e.vel.z += lungeZ;
         if (player.invuln <= 0) {
           player.hp -= e.type.dmg;
           player.dmgFlash = 0.2;
           spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0xc62828, 6, 4);
+          spawnParticles(new THREE.Vector3(e.x, e.y + e.type.r, e.z), e.type.color, 4, 3);
           if (player.hp <= 0) {
             player.alive = false;
             document.getElementById('death-screen').style.display = 'flex';
@@ -284,20 +291,41 @@ export function updateEnemyAI(dt) {
     e.mesh.rotation.y = e.facing;
 
     e.animT += dt * (e.state === 'chase' ? e.type.speed * 1.5 : e.type.speed * 0.6);
+    if (e.atkAnim > 0) e.atkAnim = Math.max(0, e.atkAnim - dt);
     const ud = e.mesh.userData;
-    if (!isFlying) {
-      const legSwing = Math.sin(e.animT * 4) * 0.4;
-      if (ud.legL) ud.legL.rotation.x = legSwing;
-      if (ud.legR) ud.legR.rotation.x = -legSwing;
-      const armSwing = Math.sin(e.animT * 4) * 0.3;
-      if (ud.armL) ud.armL.rotation.x = -armSwing;
-      if (ud.armR) ud.armR.rotation.x = armSwing;
+    const atkT = e.atkAnim / 0.35;
+    if (e.atkAnim > 0) {
+      const phase = (1 - atkT) * Math.PI;
+      const swing = Math.sin(phase) * 1.6;
+      if (ud.armL) { ud.armL.rotation.x = -swing; ud.armL.rotation.z = 0.5 + swing * 0.3; }
+      if (ud.armR) { ud.armR.rotation.x = -swing; ud.armR.rotation.z = -0.5 - swing * 0.3; }
+      if (ud.body) {
+        const squash = Math.sin(phase) * 0.12;
+        ud.body.scale.set(1 + squash, 1 - squash * 0.5, 1);
+        ud.body.position.y = e.type.r + Math.sin(phase) * e.type.r * 0.3;
+      }
+      if (!isFlying) {
+        if (ud.legL) ud.legL.rotation.x = Math.sin(phase) * 0.3;
+        if (ud.legR) ud.legR.rotation.x = -Math.sin(phase) * 0.3;
+      }
     } else {
-      const wingFlap = Math.sin(e.animT * 12) * 0.6;
-      if (ud.wingL) ud.wingL.rotation.z = -0.3 + wingFlap;
-      if (ud.wingR) ud.wingR.rotation.z = 0.3 - wingFlap;
-      if (ud.legL) ud.legL.rotation.x = 0.3;
-      if (ud.legR) ud.legR.rotation.x = 0.3;
+      if (ud.body) { ud.body.scale.set(1, 1, 1); ud.body.position.y = e.type.r; }
+      if (!isFlying) {
+        const legSwing = Math.sin(e.animT * 4) * 0.4;
+        if (ud.legL) ud.legL.rotation.x = legSwing;
+        if (ud.legR) ud.legR.rotation.x = -legSwing;
+        const armSwing = Math.sin(e.animT * 4) * 0.3;
+        if (ud.armL) { ud.armL.rotation.x = -armSwing; ud.armL.rotation.z = 0.5; }
+        if (ud.armR) { ud.armR.rotation.x = armSwing; ud.armR.rotation.z = -0.5; }
+      } else {
+        const wingFlap = Math.sin(e.animT * 12) * 0.6;
+        if (ud.wingL) ud.wingL.rotation.z = -0.3 + wingFlap;
+        if (ud.wingR) ud.wingR.rotation.z = 0.3 - wingFlap;
+        if (ud.legL) ud.legL.rotation.x = 0.3;
+        if (ud.legR) ud.legR.rotation.x = 0.3;
+        if (ud.armL) ud.armL.rotation.z = 0.5;
+        if (ud.armR) ud.armR.rotation.z = -0.5;
+      }
     }
     if (ud.shadow) ud.shadow.position.y = eth2 - e.y + 0.05;
 

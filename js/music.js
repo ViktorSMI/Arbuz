@@ -182,23 +182,27 @@ function bossTickFn() {
   }
 }
 
+const fadeIntervals = new Map();
+
 function fadeTo(node, target, durationMs) {
-  if (fadeInterval) clearInterval(fadeInterval);
+  if (fadeIntervals.has(node)) clearInterval(fadeIntervals.get(node));
   const startVal = node.gain.value;
   const diff = target - startVal;
+  if (Math.abs(diff) < 0.001) { node.gain.value = target; return; }
   const steps = Math.max(1, Math.floor(durationMs / 30));
   let step = 0;
-  fadeInterval = setInterval(() => {
+  const iv = setInterval(() => {
     step++;
     const t = step / steps;
     const ease = t * t * (3 - 2 * t);
     node.gain.value = startVal + diff * ease;
     if (step >= steps) {
       node.gain.value = target;
-      clearInterval(fadeInterval);
-      fadeInterval = null;
+      clearInterval(iv);
+      fadeIntervals.delete(node);
     }
   }, 30);
+  fadeIntervals.set(node, iv);
 }
 
 function startExploreLoop() {
@@ -265,4 +269,150 @@ export function stopMusic() {
 
 export function setMusicVolume(v) {
   if (masterGain) masterGain.gain.value = Math.max(0, Math.min(1, v));
+}
+
+/* ── SFX system ── */
+let sfxCtx = null;
+let sfxGainNode = null;
+
+function initSfxCtx() {
+  if (sfxCtx) return;
+  sfxCtx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+  sfxGainNode = sfxCtx.createGain();
+  sfxGainNode.gain.value = 0.25;
+  sfxGainNode.connect(sfxCtx.destination);
+}
+
+function sfxNote(freq, dur, type, vol) {
+  if (!sfxCtx) return;
+  const o = sfxCtx.createOscillator();
+  const g = sfxCtx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, sfxCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, sfxCtx.currentTime + dur);
+  o.connect(g); g.connect(sfxGainNode);
+  o.start(sfxCtx.currentTime); o.stop(sfxCtx.currentTime + dur + 0.02);
+}
+
+function sfxNoise(dur, vol) {
+  if (!sfxCtx) return;
+  const bufSize = sfxCtx.sampleRate * dur;
+  const buf = sfxCtx.createBuffer(1, bufSize, sfxCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1);
+  const src = sfxCtx.createBufferSource();
+  src.buffer = buf;
+  const g = sfxCtx.createGain();
+  g.gain.setValueAtTime(vol, sfxCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, sfxCtx.currentTime + dur);
+  src.connect(g); g.connect(sfxGainNode);
+  src.start(); src.stop(sfxCtx.currentTime + dur + 0.02);
+}
+
+export function sfxJump() {
+  initSfxCtx();
+  sfxNote(320, 0.12, 'sine', 0.3);
+  sfxNote(480, 0.1, 'sine', 0.2);
+}
+
+export function sfxLand(impact) {
+  initSfxCtx();
+  const v = Math.min(0.4, impact * 0.5);
+  sfxNote(60, 0.15, 'triangle', v);
+  sfxNote(45, 0.2, 'sine', v * 0.6);
+}
+
+export function sfxAttack(combo) {
+  initSfxCtx();
+  sfxNoise(0.1, 0.2);
+  const pitches = [400, 500, 350];
+  sfxNote(pitches[(combo - 1) % 3], 0.08, 'sawtooth', 0.15);
+  if (combo === 3) {
+    sfxNote(200, 0.15, 'square', 0.12);
+  }
+}
+
+export function sfxDodge() {
+  initSfxCtx();
+  sfxNoise(0.07, 0.15);
+  sfxNote(600, 0.06, 'sine', 0.12);
+}
+
+export function sfxHit() {
+  initSfxCtx();
+  sfxNote(150, 0.12, 'square', 0.25);
+  sfxNote(80, 0.15, 'sawtooth', 0.15);
+}
+
+export function sfxEnemyHit() {
+  initSfxCtx();
+  sfxNote(250, 0.08, 'square', 0.2);
+  sfxNote(180, 0.1, 'triangle', 0.15);
+}
+
+export function sfxBossHit() {
+  initSfxCtx();
+  sfxNote(120, 0.15, 'sawtooth', 0.3);
+  sfxNote(80, 0.2, 'square', 0.2);
+  sfxNote(200, 0.1, 'triangle', 0.15);
+}
+
+export function sfxBossSlam() {
+  initSfxCtx();
+  sfxNote(40, 0.3, 'sawtooth', 0.4);
+  sfxNote(60, 0.25, 'square', 0.3);
+  sfxNoise(0.15, 0.25);
+}
+
+export function sfxBossCharge() {
+  initSfxCtx();
+  sfxNote(100, 0.2, 'sawtooth', 0.2);
+  sfxNote(150, 0.15, 'square', 0.15);
+}
+
+export function sfxBossSwipe() {
+  initSfxCtx();
+  sfxNoise(0.12, 0.2);
+  sfxNote(300, 0.1, 'sawtooth', 0.2);
+}
+
+export function sfxDeath() {
+  initSfxCtx();
+  sfxNote(300, 0.3, 'sawtooth', 0.3);
+  setTimeout(() => sfxNote(200, 0.3, 'sawtooth', 0.25), 100);
+  setTimeout(() => sfxNote(120, 0.4, 'sawtooth', 0.2), 220);
+  setTimeout(() => sfxNote(60, 0.5, 'square', 0.2), 350);
+}
+
+export function sfxNpcBabble() {
+  initSfxCtx();
+  const vowels = [300, 400, 500, 350, 450, 550, 280, 420];
+  const count = 4 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < count; i++) {
+    const t = sfxCtx.currentTime + i * 0.06;
+    const freq = vowels[Math.floor(Math.random() * vowels.length)] * (0.8 + Math.random() * 0.5);
+    const o = sfxCtx.createOscillator();
+    const g = sfxCtx.createGain();
+    o.type = Math.random() > 0.5 ? 'triangle' : 'sine';
+    o.frequency.setValueAtTime(freq, t);
+    o.frequency.linearRampToValueAtTime(freq * (0.85 + Math.random() * 0.3), t + 0.05);
+    g.gain.setValueAtTime(0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.055);
+    o.connect(g); g.connect(sfxGainNode);
+    o.start(t); o.stop(t + 0.07);
+  }
+}
+
+export function sfxLevelUp() {
+  initSfxCtx();
+  sfxNote(523, 0.15, 'sine', 0.25);
+  setTimeout(() => sfxNote(659, 0.15, 'sine', 0.25), 100);
+  setTimeout(() => sfxNote(784, 0.2, 'sine', 0.3), 200);
+}
+
+export function sfxPickup() {
+  initSfxCtx();
+  sfxNote(600, 0.08, 'sine', 0.2);
+  sfxNote(800, 0.1, 'sine', 0.15);
 }

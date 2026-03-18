@@ -308,6 +308,9 @@ export function spawnBoss() {
     vel: new THREE.Vector3(),
     windupTimer: 0, nextAttack: '',
     xpReward: def.xpReward,
+    slamJumping: false, slamJumpVel: 0, slamLanding: false, slamLandTimer: 0,
+    spinAngle: 0, saltoAngle: 0,
+    swipeSpinAngle: 0, swipeLunging: false, swipeLungeTimer: 0,
   };
   bossState.bossActive = true;
 }
@@ -405,7 +408,11 @@ export function updateBoss(dt) {
     } else if (b.nextAttack === 'slam') {
       telegraphSlamMat.opacity = 0.2 + Math.sin(b.windupTimer * 15) * 0.15;
       telegraphSlamMesh.position.set(b.x, b.y + 0.5, b.z);
-      b.mesh.position.y = b.y + (0.8 - b.windupTimer) * 4;
+      const jumpProgress = 1 - b.windupTimer / (b.phase === 2 ? 0.6 : 0.8);
+      b.mesh.position.y = b.y + jumpProgress * 14;
+      b.mesh.scale.set(1 - jumpProgress * 0.15, 1 + jumpProgress * 0.3, 1 - jumpProgress * 0.15);
+      b.saltoAngle = jumpProgress * Math.PI * 2;
+      b.mesh.rotation.x = b.saltoAngle;
     } else if (b.nextAttack === 'swipe') {
       telegraphSwipeMat.opacity = 0.25 + Math.sin(b.windupTimer * 15) * 0.15;
       telegraphSwipeMesh.position.set(b.x, b.y + 0.5, b.z);
@@ -424,15 +431,45 @@ export function updateBoss(dt) {
       b.charging = true;
       b.chargeTimer = 0.8;
       b.state = 'charge';
+      b.spinAngle = 0;
     } else if (b.nextAttack === 'slam') {
+      b.slamJumping = false;
+      b.slamLanding = true;
+      b.slamLandTimer = 0.25;
+      b.mesh.rotation.x = 0;
+      b.mesh.scale.set(1, 1, 1);
+    } else if (b.nextAttack === 'swipe') {
+      spawnParticles(new THREE.Vector3(b.x + Math.sin(b.facing) * 3, b.y + 2, b.z + Math.cos(b.facing) * 3), 0xffab00, 8, 6);
+      b.swipeLunging = true;
+      b.swipeLungeTimer = 0.35;
+      b.swipeSpinAngle = 0;
+      const lungeDir = new THREE.Vector3(dx, 0, dz).normalize();
+      b.vel.copy(lungeDir.multiplyScalar(15));
+      b.vel.y = 4;
+    }
+    b.nextAttack = '';
+  }
+  else if (b.slamLanding) {
+    b.slamLandTimer -= dt;
+    const landProg = 1 - b.slamLandTimer / 0.25;
+    b.mesh.position.y = b.y + (1 - landProg) * 14;
+    b.mesh.scale.set(1 + landProg * 0.3, 1 - landProg * 0.2, 1 + landProg * 0.3);
+    if (b.slamLandTimer <= 0) {
+      b.slamLanding = false;
+      b.mesh.position.y = b.y;
+      b.mesh.scale.set(1, 1, 1);
+      b.mesh.rotation.x = 0;
       b.slamCd = b.phase === 2 ? 2 : 3;
-      spawnParticles(new THREE.Vector3(b.x, b.y + 0.5, b.z), 0x8d6e63, 20, 10);
-      spawnParticles(new THREE.Vector3(b.x, b.y + 0.5, b.z), 0xff6f00, 10, 6);
-      if (dist < 8 && player.invuln <= 0) {
-        player.hp -= (b.phase === 2 ? 30 : 20);
+      spawnParticles(new THREE.Vector3(b.x, b.y + 0.5, b.z), 0x8d6e63, 25, 12);
+      spawnParticles(new THREE.Vector3(b.x, b.y + 0.5, b.z), 0xff6f00, 15, 8);
+      spawnParticles(new THREE.Vector3(b.x, b.y + 1, b.z), 0xfdd835, 10, 6);
+      if (dist < 9 && player.invuln <= 0) {
+        player.hp -= (b.phase === 2 ? 35 : 25);
         player.dmgFlash = 0.3;
-        player.vel.y = 8;
-        spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0xc62828, 8, 4);
+        player.vel.y = 10;
+        const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(8);
+        player.vel.x = kd.x; player.vel.z = kd.z;
+        spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0xc62828, 10, 5);
         if (player.hp <= 0) {
           player.alive = false;
           document.getElementById('death-screen').style.display = 'flex';
@@ -441,31 +478,43 @@ export function updateBoss(dt) {
       }
       b.stateTimer = 1.5;
       b.state = 'idle';
-    } else if (b.nextAttack === 'swipe') {
-      spawnParticles(new THREE.Vector3(b.x + Math.sin(b.facing) * 3, b.y + 2, b.z + Math.cos(b.facing) * 3), 0xffab00, 8, 6);
-      if (dist < 4.5 && player.invuln <= 0) {
-        player.hp -= (b.phase === 2 ? 20 : 15);
-        player.dmgFlash = 0.2;
-        const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(6);
-        player.vel.copy(kd); player.vel.y = 3;
-        spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0xc62828, 6, 4);
-        if (player.hp <= 0) {
-          player.alive = false;
-          document.getElementById('death-screen').style.display = 'flex';
-          document.exitPointerLock();
-        }
+    }
+  }
+  else if (b.swipeLunging) {
+    b.swipeLungeTimer -= dt;
+    b.swipeSpinAngle += dt * 25;
+    b.mesh.rotation.z = b.swipeSpinAngle;
+    b.mesh.position.y = b.y + Math.max(0, b.vel.y * b.swipeLungeTimer);
+    spawnParticles(new THREE.Vector3(b.x, b.y + 2, b.z), 0xffab00, 2, 3);
+    if (dist < 5 && player.invuln <= 0) {
+      player.hp -= (b.phase === 2 ? 22 : 15);
+      player.dmgFlash = 0.2;
+      const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(8);
+      player.vel.copy(kd); player.vel.y = 4;
+      spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0xc62828, 8, 4);
+      if (player.hp <= 0) {
+        player.alive = false;
+        document.getElementById('death-screen').style.display = 'flex';
+        document.exitPointerLock();
       }
+      b.swipeLunging = false;
+    }
+    if (b.swipeLungeTimer <= 0) {
+      b.swipeLunging = false;
+      b.mesh.rotation.z = 0;
       b.atkCd = 1.0;
       b.state = 'idle';
       b.stateTimer = 0.8;
     }
-    b.nextAttack = '';
   }
   else if (b.charging) {
     b.chargeTimer -= dt;
     b.x += b.chargeDir.x * 25 * dt;
     b.z += b.chargeDir.z * 25 * dt;
-    spawnParticles(new THREE.Vector3(b.x, b.y + 1, b.z), 0x8d6e63, 2, 3);
+    b.spinAngle += dt * 18;
+    b.mesh.rotation.x = b.spinAngle;
+    spawnParticles(new THREE.Vector3(b.x, b.y + 1, b.z), 0x8d6e63, 3, 4);
+    spawnParticles(new THREE.Vector3(b.x, b.y + 2, b.z), 0xff1744, 1, 3);
     if (dist < 4) {
       if (player.invuln <= 0) {
         player.hp -= (b.phase === 2 ? 35 : 25);
@@ -480,7 +529,7 @@ export function updateBoss(dt) {
         }
       }
     }
-    if (b.chargeTimer <= 0) { b.charging = false; b.atkCd = 1.5; b.state = 'idle'; b.stateTimer = 1; }
+    if (b.chargeTimer <= 0) { b.charging = false; b.atkCd = 1.5; b.state = 'idle'; b.stateTimer = 1; b.mesh.rotation.x = 0; b.spinAngle = 0; }
   }
   else {
     b.stateTimer -= dt;
@@ -520,15 +569,19 @@ export function updateBoss(dt) {
 
   if (!b.animT) b.animT = 0;
   b.animT += dt;
-  const idleBob = Math.sin(b.animT * 2.5) * 0.15;
-  const breathScale = 1 + Math.sin(b.animT * 3) * 0.02;
-  b.mesh.position.y += idleBob;
-  b.mesh.scale.set(breathScale, breathScale, breathScale);
+  if (!b.slamLanding && !b.slamJumping && !b.swipeLunging && !b.charging) {
+    const idleBob = Math.sin(b.animT * 2.5) * 0.15;
+    const breathScale = 1 + Math.sin(b.animT * 3) * 0.02;
+    b.mesh.position.y += idleBob;
+    if (b.windupTimer <= 0 || b.nextAttack !== 'slam') {
+      b.mesh.scale.set(breathScale, breathScale, breathScale);
+    }
+  }
   if (b.charging) {
-    b.mesh.rotation.z = Math.sin(b.animT * 20) * 0.15;
+    /* spin handled in charge block */
   } else if (b.windupTimer > 0) {
     /* windup shake handled above */
-  } else {
+  } else if (!b.swipeLunging && !b.slamLanding) {
     b.mesh.rotation.z *= 0.9;
   }
 

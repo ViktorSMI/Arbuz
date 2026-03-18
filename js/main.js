@@ -17,7 +17,7 @@ import { mouse, pointer, keys, keysJustPressed, lockOn, touch } from './input.js
 import { updateHud, drawMinimap } from './hud.js';
 import { portalState, spawnPortal, updatePortal, removePortal } from './portal.js';
 import { spawnSeed, updateSeeds, clearSeeds } from './seeds.js';
-import { startMusic, switchToBossMusic, switchToExploreMusic } from './music.js';
+import { startMusic, switchToBossMusic, switchToExploreMusic, sfxJump, sfxLand, sfxAttack, sfxDodge, sfxHit, sfxDeath, sfxEnemyHit, sfxNpcBabble, sfxLevelUp, sfxPickup } from './music.js';
 import { npcs, spawnNpcs, clearNpcs, updateNpcs, getNearestNpc, interactNpc, hitNpc } from './npc.js';
 
 spawnEnemies();
@@ -65,6 +65,7 @@ document.getElementById('btn-respawn').addEventListener('click', () => {
   player.hp = player.maxHp;
   player.stamina = player.maxStamina;
   player.alive = true;
+  player._deathMusicStopped = false;
   player.pos.set(0, getTerrainHeight(0, 0), 0);
   player.vel.set(0, 0, 0);
   resetBoss();
@@ -106,6 +107,11 @@ const clock = new THREE.Clock();
 function update() {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (!gameStarted || !player.alive) {
+    if (!player.alive && !player._deathMusicStopped) {
+      player._deathMusicStopped = true;
+      switchToExploreMusic();
+      sfxDeath();
+    }
     renderer.render(scene, camera);
     requestAnimationFrame(update);
     return;
@@ -219,6 +225,7 @@ function update() {
     player.staminaDelay = STAMINA_REGEN_DELAY;
     player.dodgeDir.copy(moving ? moveDir : forward);
     spawnParticles(player.pos.clone().setY(player.pos.y + 0.5), 0x4caf50, 5, 3);
+    sfxDodge();
   }
 
   if (player.dodging) {
@@ -234,6 +241,7 @@ function update() {
   if ((keys['Space']) && player.grounded && !player.dodging && !inWater) {
     player.vel.y = PLAYER_JUMP;
     player.grounded = false;
+    sfxJump();
   }
 
   if (inWater) {
@@ -297,6 +305,7 @@ function update() {
     player.staminaDelay = STAMINA_REGEN_DELAY;
     player.comboCount = (player.comboCount % 3) + 1;
     player.comboTimer = COMBO_WINDOW;
+    sfxAttack(player.comboCount);
 
     const atkPos = player.pos.clone().add(forward.clone().multiplyScalar(2));
     atkPos.y += 1;
@@ -490,38 +499,97 @@ function update() {
     playerMesh.rotation.x = 0.25;
   } else if (moving && player.grounded && !player.dodging) {
     player.animTime += dt * (sprinting ? 14 : 10);
-    const legSwing = Math.sin(player.animTime) * 0.4;
+    const amp = sprinting ? 0.55 : 0.4;
+    const legSwing = Math.sin(player.animTime) * amp;
     playerMesh.userData.legL.rotation.x = legSwing;
     playerMesh.userData.legR.rotation.x = -legSwing;
     playerMesh.userData.shoeL.position.z = 0.05 + Math.sin(player.animTime) * 0.15;
     playerMesh.userData.shoeR.position.z = 0.05 - Math.sin(player.animTime) * 0.15;
-    playerMesh.userData.armL.rotation.x = -legSwing * 0.5;
-    playerMesh.userData.armR.rotation.x = legSwing * 0.5;
+    playerMesh.userData.armL.rotation.x = -legSwing * 0.6;
+    playerMesh.userData.armR.rotation.x = legSwing * 0.6;
+    playerMesh.userData.armL.rotation.z = 0.5 + Math.abs(legSwing) * 0.15;
+    playerMesh.userData.armR.rotation.z = -0.5 - Math.abs(legSwing) * 0.15;
+    if (sprinting) {
+      playerMesh.rotation.x = 0.12;
+      playerMesh.userData.body.position.y = 1.2 + Math.abs(Math.sin(player.animTime * 2)) * 0.08;
+    }
+  } else if (!player.grounded && !player.dodging && !inWater) {
+    const airT = Math.min(1, Math.abs(player.vel.y) / 10);
+    if (player.vel.y > 0.5) {
+      playerMesh.userData.legL.rotation.x = -0.6 * airT;
+      playerMesh.userData.legR.rotation.x = -0.6 * airT;
+      playerMesh.userData.armL.rotation.x = -1.0 * airT;
+      playerMesh.userData.armR.rotation.x = -1.0 * airT;
+      playerMesh.userData.armL.rotation.z = 0.5 + 0.8 * airT;
+      playerMesh.userData.armR.rotation.z = -0.5 - 0.8 * airT;
+    } else {
+      playerMesh.userData.legL.rotation.x = 0.4 * airT;
+      playerMesh.userData.legR.rotation.x = 0.4 * airT;
+      playerMesh.userData.armL.rotation.x = 0.6 * airT;
+      playerMesh.userData.armR.rotation.x = 0.6 * airT;
+      playerMesh.userData.armL.rotation.z = 0.5 + 0.3 * airT;
+      playerMesh.userData.armR.rotation.z = -0.5 - 0.3 * airT;
+    }
   } else {
     playerMesh.userData.legL.rotation.x *= 0.85;
     playerMesh.userData.legR.rotation.x *= 0.85;
     playerMesh.userData.armL.rotation.x *= 0.85;
     playerMesh.userData.armR.rotation.x *= 0.85;
+    playerMesh.userData.armL.rotation.z = 0.5;
+    playerMesh.userData.armR.rotation.z = -0.5;
     player.animTime += dt * 1.5;
     const idleBreath = Math.sin(player.animTime) * 0.015;
     playerMesh.scale.set(1 + idleBreath, 1 - idleBreath, 1 + idleBreath);
+    playerMesh.userData.body.position.y = 1.2;
   }
 
   if (player.attacking) {
     const t = 1 - player.attackTimer / 0.25;
-    const swingAngle = Math.sin(t * Math.PI) * (player.comboCount % 2 === 1 ? 1.5 : -1.5);
-    playerMesh.userData.sword.rotation.x = swingAngle;
-    playerMesh.userData.armR.rotation.x = swingAngle * 0.5;
+    const phase = Math.sin(t * Math.PI);
+    const combo = player.comboCount % 3;
+    if (combo === 1) {
+      playerMesh.userData.sword.rotation.set(phase * 2.0, 0, -0.3);
+      playerMesh.userData.armR.rotation.x = -phase * 1.2;
+      playerMesh.userData.body.position.y = 1.2 - phase * 0.08;
+      playerMesh.rotation.x = phase * 0.1;
+    } else if (combo === 2) {
+      playerMesh.userData.sword.rotation.set(-phase * 0.5, phase * 2.2, -0.3);
+      playerMesh.userData.armR.rotation.x = phase * 0.3;
+      playerMesh.userData.armR.rotation.z = -0.5 - phase * 0.8;
+      playerMesh.userData.body.position.y = 1.2;
+    } else {
+      playerMesh.userData.sword.rotation.set(phase * 2.5, 0, -0.3 + phase * 0.6);
+      playerMesh.userData.armR.rotation.x = -phase * 1.5;
+      playerMesh.userData.armL.rotation.x = -phase * 0.4;
+      playerMesh.userData.body.position.y = 1.2 - phase * 0.12;
+      playerMesh.rotation.x = phase * 0.15;
+      if (!player.grounded) player.vel.y = Math.min(player.vel.y, -2);
+    }
   } else {
     playerMesh.userData.sword.rotation.x *= 0.8;
+    playerMesh.userData.sword.rotation.y *= 0.8;
+    playerMesh.userData.body.position.y += (1.2 - playerMesh.userData.body.position.y) * 0.3;
   }
+
+  if (player.grounded && player.vel.y <= 0 && !player.dodging) {
+    const landImpact = Math.min(1, Math.abs(player._prevVelY || 0) / 12);
+    if (landImpact > 0.15 && (player._wasAirborne)) {
+      playerMesh.scale.set(1 + landImpact * 0.2, 1 - landImpact * 0.15, 1 + landImpact * 0.2);
+      player._wasAirborne = false;
+    }
+  }
+  if (!player.grounded) player._wasAirborne = true;
+  player._prevVelY = player.vel.y;
 
   if (player.dodging) {
     playerMesh.scale.set(1, 1, 1);
   } else {
-    playerMesh.scale.x += (1 - playerMesh.scale.x) * 0.2;
-    playerMesh.scale.y += (1 - playerMesh.scale.y) * 0.2;
-    playerMesh.scale.z += (1 - playerMesh.scale.z) * 0.2;
+    playerMesh.scale.x += (1 - playerMesh.scale.x) * 0.15;
+    playerMesh.scale.y += (1 - playerMesh.scale.y) * 0.15;
+    playerMesh.scale.z += (1 - playerMesh.scale.z) * 0.15;
+  }
+  if (!player.attacking && !player.dodging) {
+    playerMesh.rotation.x += (0 - playerMesh.rotation.x) * 0.2;
   }
 
   if (player.dmgFlash > 0) {
