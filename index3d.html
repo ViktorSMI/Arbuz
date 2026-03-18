@@ -134,34 +134,38 @@ scene.add(hemiLight);
 // =========================================================
 //  TERRAIN
 // =========================================================
-function generateHeightmap(size, seg){
-  const data = new Float32Array((seg+1)*(seg+1));
-  // multi-octave noise via sine sums
-  for(let i=0;i<=seg;i++){
-    for(let j=0;j<=seg;j++){
-      const x = (i/seg)*size - size/2;
-      const z = (j/seg)*size - size/2;
-      let h = 0;
-      h += Math.sin(x*0.02)*Math.cos(z*0.02)*8;
-      h += Math.sin(x*0.05+1.3)*Math.cos(z*0.04+0.7)*4;
-      h += Math.sin(x*0.1+2.1)*Math.sin(z*0.08+1.5)*2;
-      h += Math.cos(x*0.03+z*0.03)*6;
-      // flatten center area for spawn
-      const dc = Math.sqrt(x*x+z*z);
-      if(dc < 30) h *= dc/30;
-      data[i*(seg+1)+j] = h;
-    }
-  }
-  return data;
+function computeHeight(x, z){
+  let h = 0;
+  h += Math.sin(x*0.02)*Math.cos(z*0.02)*8;
+  h += Math.sin(x*0.05+1.3)*Math.cos(z*0.04+0.7)*4;
+  h += Math.sin(x*0.1+2.1)*Math.sin(z*0.08+1.5)*2;
+  h += Math.cos(x*0.03+z*0.03)*6;
+  const dc = Math.sqrt(x*x+z*z);
+  if(dc < 30) h *= dc/30;
+  return h;
 }
 
-const heightData = generateHeightmap(WORLD_SIZE, TERRAIN_SEG);
+// heightData indexed as [gx*(seg+1)+gz] where gx,gz map to world x,z
+const heightData = new Float32Array((TERRAIN_SEG+1)*(TERRAIN_SEG+1));
+for(let gx=0;gx<=TERRAIN_SEG;gx++){
+  for(let gz=0;gz<=TERRAIN_SEG;gz++){
+    const wx = (gx/TERRAIN_SEG - 0.5)*WORLD_SIZE;
+    const wz = (gz/TERRAIN_SEG - 0.5)*WORLD_SIZE;
+    heightData[gx*(TERRAIN_SEG+1)+gz] = computeHeight(wx,wz);
+  }
+}
 
 const terrainGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, TERRAIN_SEG, TERRAIN_SEG);
 terrainGeo.rotateX(-Math.PI/2);
 const posAttr = terrainGeo.attributes.position;
-for(let i=0;i<posAttr.count;i++){
-  posAttr.setY(i, heightData[i]);
+// PlaneGeometry after rotateX(-PI/2): vertex idx=row*(seg+1)+col
+// world x = (col/seg - 0.5)*size, world z = (0.5 - row/seg)*size
+for(let idx=0;idx<posAttr.count;idx++){
+  const row = Math.floor(idx/(TERRAIN_SEG+1));
+  const col = idx % (TERRAIN_SEG+1);
+  const gx = col;
+  const gz = row;
+  posAttr.setY(idx, heightData[gx*(TERRAIN_SEG+1)+gz]);
 }
 terrainGeo.computeVertexNormals();
 
@@ -494,6 +498,7 @@ const player = {
   grounded: false,
   yaw: 0,
   dodging: false, dodgeTimer: 0, dodgeDir: new THREE.Vector3(),
+  dodgeCd: 0,
   invuln: 0,
   attacking: false, attackTimer: 0, attackCd: 0,
   comboCount: 0, comboTimer: 0,
@@ -627,11 +632,15 @@ function spawnParticles(pos, color, count, speed){
 //  INPUT
 // =========================================================
 const keys = {};
+const keysJustPressed = {};
 let mouseDX=0,mouseDY=0;
 let mouseDown = false;
 let locked = false;
 
-document.addEventListener('keydown',e=>{keys[e.code]=true;});
+document.addEventListener('keydown',e=>{
+  if(!keys[e.code]) keysJustPressed[e.code]=true;
+  keys[e.code]=true;
+});
 document.addEventListener('keyup',e=>{keys[e.code]=false;});
 document.addEventListener('mousemove',e=>{
   if(!locked)return;
@@ -719,7 +728,7 @@ function update(){
 
   // —— Camera rotation ——
   camState.yaw -= mouseDX * CAM_SENSITIVITY;
-  camState.pitch -= mouseDY * CAM_SENSITIVITY;
+  camState.pitch += mouseDY * CAM_SENSITIVITY;
   camState.pitch = Math.max(-1.2,Math.min(0.6,camState.pitch));
   mouseDX=0;mouseDY=0;
 
@@ -728,7 +737,7 @@ function update(){
 
   // —— Movement input ——
   const forward = new THREE.Vector3(-Math.sin(camState.yaw),0,-Math.cos(camState.yaw));
-  const right = new THREE.Vector3(forward.z,0,-forward.x);
+  const right = new THREE.Vector3(-forward.z,0,forward.x);
   const moveDir = new THREE.Vector3();
   if(keys['KeyW']||keys['ArrowUp']) moveDir.add(forward);
   if(keys['KeyS']||keys['ArrowDown']) moveDir.sub(forward);
@@ -742,10 +751,13 @@ function update(){
   const spd = sprinting ? PLAYER_SPRINT : player.speed;
   if(sprinting) {player.stamina -= 12*dt; player.staminaDelay=STAMINA_REGEN_DELAY;}
 
-  // —— Dodge (Shift) ——
-  if((keys['ShiftLeft']||keys['ShiftRight'])&&!player.dodging&&player.grounded&&player.stamina>=DODGE_COST){
+  // —— Dodge (Shift) — single press only, with cooldown ——
+  player.dodgeCd = Math.max(0, player.dodgeCd - dt);
+  const dodgePressed = keysJustPressed['ShiftLeft']||keysJustPressed['ShiftRight'];
+  if(dodgePressed&&!player.dodging&&player.dodgeCd<=0&&player.grounded&&player.stamina>=DODGE_COST){
     player.dodging=true;
     player.dodgeTimer=DODGE_DURATION;
+    player.dodgeCd=0.6;
     player.invuln=DODGE_IFRAMES;
     player.stamina-=DODGE_COST;
     player.staminaDelay=STAMINA_REGEN_DELAY;
@@ -864,6 +876,9 @@ function update(){
   }
   slashMat.opacity = Math.max(0,slashMat.opacity-dt*4);
 
+  // clear just-pressed flags at end of frame input processing
+  for(const k in keysJustPressed) delete keysJustPressed[k];
+
   // —— Enemy AI ——
   for(const e of enemies){
     if(!e.alive)continue;
@@ -944,7 +959,7 @@ function update(){
 
   // —— Player mesh update ——
   playerMesh.position.copy(player.pos);
-  playerMesh.rotation.y = player.yaw;
+  playerMesh.rotation.y = player.yaw + Math.PI;
 
   // walk animation
   if(moving && player.grounded && !player.dodging){
