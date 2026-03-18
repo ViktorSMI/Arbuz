@@ -24,7 +24,8 @@ import { updateSkills, getSkillStates, clearSkillEntities } from './skills.js';
 import { updateLootDrops, clearLootDrops, rollLootDrop, getDmgMultiplier, getDefMultiplier, getEquippedSword } from './equipment.js';
 import { applyBiome, getBiome } from './biomes.js';
 import { updateDayNight, isNight, getTimeOfDay } from './daynight.js';
-import { initPostProcessing, getComposer, resizePostProcessing, setBloomIntensity } from './postprocessing.js';
+import { initPostProcessing, getComposer, resizePostProcessing, setBloomIntensity, triggerScreenShake, getScreenShakeOffset, setLowHpEffect } from './postprocessing.js';
+import { spawnDamageNumber, updateDamageNumbers, clearDamageNumbers } from './damage-numbers.js';
 import { updateProjectiles, clearProjectiles } from './projectiles.js';
 import { updateHazards, clearHazards } from './hazards.js';
 import { saveGame, loadGame, hasSave } from './save.js';
@@ -45,7 +46,7 @@ loadSettings();
 const worldRefs = { terrainMat, grassMat, leafMats, scene, ambientLight, hemiLight, sunLight, waterMat, skyMat };
 const dayNightRefs = { sunLight, ambientLight, hemiLight, scene, sunMesh, baseFogDensity: 0.005 };
 
-spawnEnemies();
+spawnEnemies(0);
 spawnNpcs();
 
 let gameStarted = false;
@@ -462,6 +463,7 @@ function update() {
         e.flashTimer = 0.15;
         e.stunTimer = 0.3;
         sfxEnemyHit();
+        spawnDamageNumber(ex, ey, ez, dmg, 0xff4444);
         const knockDir = new THREE.Vector3(ex - player.pos.x, 0, ez - player.pos.z).normalize();
         e.vel.copy(knockDir.multiplyScalar(8));
         e.vel.y = 3;
@@ -481,6 +483,10 @@ function update() {
       }
     }
     hitBoss(dmg);
+    if (bossState.bossObj && bossState.bossObj.flashTimer > 0) {
+      const b = bossState.bossObj;
+      spawnDamageNumber(b.x, b.y + 3, b.z, dmg, 0xffaa00);
+    }
 
     for (const n of npcs) {
       if (!n.alive) continue;
@@ -583,6 +589,19 @@ function update() {
         resetBoss();
         gameLocation++;
         bossState.currentBossIndex = gameLocation - 1;
+
+        if (gameLocation > 6) {
+          // Show victory screen
+          document.getElementById('victory-kills').textContent = 'Убийств: ' + player.kills;
+          document.getElementById('victory-level').textContent = 'Уровень: ' + player.level;
+          document.getElementById('victory-seeds').textContent = 'Семечек: ' + player.seeds;
+          document.getElementById('victory-screen').style.display = 'flex';
+          document.exitPointerLock();
+          gameStarted = false;
+          portalPrompt.style.display = 'none';
+          return;
+        }
+
         const nx = (Math.random() - 0.5) * WORLD_SIZE * 0.6;
         const nz = (Math.random() - 0.5) * WORLD_SIZE * 0.6;
         player.pos.set(nx, getTerrainHeight(nx, nz), nz);
@@ -593,12 +612,13 @@ function update() {
           (Math.random() - 0.5) * WORLD_SIZE * 0.4
         );
         setupArena();
-        spawnEnemies();
+        spawnEnemies(gameLocation - 1);
         spawnNpcs();
         clearProjectiles();
         clearHazards();
         clearLootDrops();
         clearSkillEntities();
+        clearDamageNumbers();
         bossState.bossDefeated = false;
         portalPrompt.style.display = 'none';
         applyBiome(gameLocation - 1, worldRefs);
@@ -640,6 +660,7 @@ function update() {
   updateProjectiles(dt);
   updateHazards(dt);
   updateLootDrops(dt);
+  updateDamageNumbers(dt);
 
   targetShowTimer = Math.max(0, targetShowTimer - dt);
 
@@ -775,6 +796,7 @@ function update() {
   } else {
     playerMesh.userData.body.material.emissiveIntensity = 0;
   }
+  setLowHpEffect(player.hp / player.maxHp);
 
   playerMesh.userData.shadow.position.y = getTerrainHeight(player.pos.x, player.pos.z) - player.pos.y + 0.05;
 
@@ -793,6 +815,9 @@ function update() {
 
   const lerpFactor = 1 - Math.exp(-8 * dt);
   camera.position.lerp(desiredPos, lerpFactor);
+  const shake = getScreenShakeOffset();
+  camera.position.x += shake.x;
+  camera.position.y += shake.y;
   camera.lookAt(camTarget);
   if (lockActive && lockTarget && lockTarget.alive) {
     const lockR = lockTarget.type ? lockTarget.type.r : 3;
@@ -838,6 +863,71 @@ function update() {
   else renderer.render(scene, camera);
   requestAnimationFrame(update);
 }
+
+// Victory screen buttons
+document.getElementById('btn-newgame-plus')?.addEventListener('click', () => {
+  player.ngPlus = (player.ngPlus || 0) + 1;
+  gameLocation = 1;
+  bossState.currentBossIndex = 0;
+  player.hp = player.maxHp;
+  player.stamina = player.maxStamina;
+  player.alive = true;
+  player._deathMusicStopped = false;
+  const nx = (Math.random() - 0.5) * WORLD_SIZE * 0.6;
+  const nz = (Math.random() - 0.5) * WORLD_SIZE * 0.6;
+  player.pos.set(nx, getTerrainHeight(nx, nz), nz);
+  player.vel.set(0, 0, 0);
+  BOSS_ARENA_POS.set(
+    (Math.random() - 0.5) * WORLD_SIZE * 0.4,
+    0,
+    (Math.random() - 0.5) * WORLD_SIZE * 0.4
+  );
+  resetBoss();
+  setupArena();
+  clearEnemies();
+  clearSeeds();
+  clearNpcs();
+  clearProjectiles();
+  clearHazards();
+  clearLootDrops();
+  clearSkillEntities();
+  // Scale enemy HP by 1.5x per NG+ cycle (handled via player.ngPlus in spawn)
+  spawnEnemies(0);
+  spawnNpcs();
+  bossState.bossDefeated = false;
+  applyBiome(0, worldRefs);
+  dayNightRefs.baseFogDensity = getBiome(0).fogDensity;
+  startMusic(0);
+  document.getElementById('victory-screen').style.display = 'none';
+  gameStarted = true;
+  if (!touch.active) renderer.domElement.requestPointerLock();
+});
+
+document.getElementById('btn-victory-menu')?.addEventListener('click', () => {
+  document.getElementById('victory-screen').style.display = 'none';
+  blocker.style.display = 'flex';
+  gameLocation = 1;
+  bossState.currentBossIndex = 0;
+  resetBoss();
+  clearEnemies();
+  clearSeeds();
+  clearNpcs();
+  clearProjectiles();
+  clearHazards();
+  clearLootDrops();
+  clearSkillEntities();
+  // Reset player for fresh start from menu
+  player.hp = player.maxHp;
+  player.stamina = player.maxStamina;
+  player.alive = true;
+  player._deathMusicStopped = false;
+  player.pos.set(0, getTerrainHeight(0, 0), 0);
+  player.vel.set(0, 0, 0);
+  applyBiome(0, worldRefs);
+  spawnEnemies(0);
+  spawnNpcs();
+  setupArena();
+});
 
 player.pos.set(0, getTerrainHeight(0, 0), 0);
 requestAnimationFrame(update);

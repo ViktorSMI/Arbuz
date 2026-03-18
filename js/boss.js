@@ -7,6 +7,7 @@ import { spawnParticles } from './particles.js';
 import { sfxBossSlam, sfxBossCharge, sfxBossSwipe, sfxBossHit, sfxHit, sfxBossDefeat } from './music.js';
 import { BOSS_AIS } from './boss-ai.js';
 import { startBossDeathSequence, isCinematicActive } from './boss-death.js';
+import { triggerScreenShake } from './postprocessing.js';
 
 export const bossState = {
   bossObj: null,
@@ -510,6 +511,7 @@ export function updateBoss(dt) {
       b.mesh.rotation.x = 0;
       b.slamCd = b.phase === 2 ? 2 : 3;
       sfxBossSlam();
+      triggerScreenShake(0.8, 0.5);
       spawnParticles(new THREE.Vector3(b.x, b.y + 0.5, b.z), 0x8d6e63, 25, 12);
       spawnParticles(new THREE.Vector3(b.x, b.y + 0.5, b.z), 0xff6f00, 15, 8);
       spawnParticles(new THREE.Vector3(b.x, b.y + 1, b.z), 0xfdd835, 10, 6);
@@ -543,6 +545,7 @@ export function updateBoss(dt) {
       sfxHit();
       player.hp -= (b.phase === 2 ? 22 : 15);
       player.dmgFlash = 0.2;
+      triggerScreenShake(0.3, 0.2);
       const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(8);
       player.vel.copy(kd); player.vel.y = 4;
       spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0xc62828, 8, 4);

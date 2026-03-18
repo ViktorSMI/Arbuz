@@ -5,6 +5,7 @@ import { getTerrainHeight } from './terrain.js';
 import { player } from './player.js';
 import { spawnParticles } from './particles.js';
 import { sfxHit, sfxEnemyAttack } from './music.js';
+import { triggerScreenShake } from './postprocessing.js';
 
 let audioCtx = null;
 let sfxGain = null;
@@ -1158,21 +1159,35 @@ function createEnemyMesh(type) {
   return group;
 }
 
-export function spawnEnemies() {
+const BIOME_ENEMIES = [
+  ['Жук-солдат', 'Муравей', 'Светлячок'],
+  ['Крыса-мутант', 'Таракан', 'Муравей'],
+  ['Голубь-бомбер', 'Оса', 'Светлячок'],
+  ['Таракан', 'Крыса-мутант', 'Богомол'],
+  ['Дворник', 'Кот', 'Жук-солдат'],
+  ['Кот', 'Дворник', 'Богомол', 'Оса'],
+];
+
+export function spawnEnemies(locationIndex = 0) {
+  const biomeNames = BIOME_ENEMIES[Math.min(locationIndex, BIOME_ENEMIES.length - 1)] || BIOME_ENEMIES[0];
+  const biomeTypes = ENEMY_TYPES.filter(t => biomeNames.includes(t.name));
+  const pool = biomeTypes.length > 0 ? biomeTypes : ENEMY_TYPES;
   for (let i = 0; i < ENEMY_COUNT; i++) {
-    const type = ENEMY_TYPES[Math.floor(Math.random() * ENEMY_TYPES.length)];
+    const type = pool[Math.floor(Math.random() * pool.length)];
     const x = (Math.random() - 0.5) * WORLD_SIZE * 0.8;
     const z = (Math.random() - 0.5) * WORLD_SIZE * 0.8;
     const dc = Math.sqrt(x * x + z * z);
     if (dc < 20) { i--; continue; }
     const y = getTerrainHeight(x, z);
     if (!type.flying && y < WATER_LEVEL + 0.5) { i--; continue; }
+    const ngMultiplier = Math.pow(1.5, player.ngPlus || 0);
+    const scaledHp = Math.floor(type.hp * ngMultiplier);
     const mesh = createEnemyMesh(type);
     mesh.position.set(x, y, z);
     scene.add(mesh);
     enemies.push({
       type, mesh, x, z, y,
-      hp: type.hp, maxHp: type.hp,
+      hp: scaledHp, maxHp: scaledHp,
       alive: true,
       state: 'patrol',
       stateTimer: Math.random() * 3,
@@ -1263,6 +1278,7 @@ export function updateEnemyAI(dt) {
           sfxHit();
           player.hp -= e.type.dmg;
           player.dmgFlash = 0.2;
+          triggerScreenShake(0.3, 0.2);
           spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0xc62828, 6, 4);
           spawnParticles(new THREE.Vector3(e.x, e.y + e.type.r, e.z), e.type.color, 4, 3);
           if (player.hp <= 0) {
