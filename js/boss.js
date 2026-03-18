@@ -519,6 +519,7 @@ export function updateBoss(dt) {
         sfxHit();
         player.hp -= (b.phase === 2 ? 35 : 25);
         player.dmgFlash = 0.3;
+        triggerScreenShake(0.3, 0.2);
         player.vel.y = 10;
         const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(8);
         player.vel.x = kd.x; player.vel.z = kd.z;
@@ -579,6 +580,7 @@ export function updateBoss(dt) {
         sfxHit();
         player.hp -= (b.phase === 2 ? 35 : 25);
         player.dmgFlash = 0.3;
+        triggerScreenShake(0.3, 0.2);
         const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(12);
         player.vel.copy(kd); player.vel.y = 6;
         spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0xc62828, 10, 5);

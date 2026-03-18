@@ -5,6 +5,7 @@ import { spawnProjectile } from './projectiles.js';
 import { spawnHazard } from './hazards.js';
 import { getTerrainHeight } from './terrain.js';
 import { scene } from './scene.js';
+import { triggerScreenShake } from './postprocessing.js';
 
 // ─────────────────────────────────────────────────
 // BOSS 0: HRUSCH (beetle) - Charge + Ground Pound
@@ -65,6 +66,7 @@ const bossAiHrusch = {
           const chargeDmg = b.phase === 2 ? 35 : 25;
           player.hp -= chargeDmg;
           player.dmgFlash = 0.3;
+          triggerScreenShake(0.3, 0.2);
           const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(12);
           player.vel.copy(kd);
           player.vel.y = 6;
@@ -117,6 +119,7 @@ const bossAiHrusch = {
           if (dist < 5 && player.invuln <= 0 && player.alive) {
             player.hp -= b.phase === 2 ? 30 : 22;
             player.dmgFlash = 0.3;
+            triggerScreenShake(0.8, 0.5);
             player.vel.y = 10;
             const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(8);
             player.vel.x = kd.x;
@@ -257,6 +260,7 @@ const bossAiSharlotta = {
           const swipeDmg = b.phase === 2 ? 22 : 15;
           player.hp -= swipeDmg;
           player.dmgFlash = 0.2;
+          triggerScreenShake(0.3, 0.2);
           const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(8);
           player.vel.copy(kd);
           player.vel.y = 4;
@@ -357,6 +361,7 @@ const bossAiSharlotta = {
       if (mdist < 1.5 && m.atkCd <= 0 && player.invuln <= 0 && player.alive) {
         player.hp -= 8;
         player.dmgFlash = 0.15;
+        triggerScreenShake(0.3, 0.2);
         spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0x9e9e9e, 4, 3);
         m.atkCd = 1.5;
         if (player.hp <= 0) {
@@ -424,6 +429,7 @@ const bossAiKarlusha = {
           const meleeDmg = b.phase === 2 ? 20 : 15;
           player.hp -= meleeDmg;
           player.dmgFlash = 0.2;
+          triggerScreenShake(0.3, 0.2);
           b.atkCd = 1.2;
           const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(6);
           player.vel.copy(kd);
@@ -519,6 +525,7 @@ const bossAiKarlusha = {
           const diveDmg = b.phase === 2 ? 35 : 30;
           player.hp -= diveDmg;
           player.dmgFlash = 0.3;
+          triggerScreenShake(0.3, 0.2);
           const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(14);
           player.vel.copy(kd);
           player.vel.y = 8;
@@ -631,6 +638,7 @@ const bossAiCherv = {
           const meleeDmg = b.phase === 2 ? 20 : 15;
           player.hp -= meleeDmg;
           player.dmgFlash = 0.2;
+          triggerScreenShake(0.3, 0.2);
           b.atkCd = 1.5;
           const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(5);
           player.vel.copy(kd);
@@ -736,6 +744,7 @@ const bossAiCherv = {
           if (emDist < 6 && player.invuln <= 0 && player.alive) {
             player.hp -= 25;
             player.dmgFlash = 0.3;
+            triggerScreenShake(0.8, 0.5);
             player.vel.y = 10;
             const kd = new THREE.Vector3(emDx, 0, emDz).normalize().multiplyScalar(10);
             player.vel.x = kd.x;
@@ -950,6 +959,7 @@ const bossAiNozhov = {
           if (dist < 3.5 && player.invuln <= 0 && player.alive) {
             player.hp -= 20;
             player.dmgFlash = 0.25;
+            triggerScreenShake(0.3, 0.2);
             const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(10);
             player.vel.copy(kd);
             player.vel.y = 5;
@@ -1025,6 +1035,7 @@ const bossAiNozhov = {
       if (player.invuln <= 0 && player.alive) {
         player.hp -= 35;
         player.dmgFlash = 0.4;
+        triggerScreenShake(0.3, 0.2);
         const dx = player.pos.x - b.x;
         const dz = player.pos.z - b.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
@@ -1089,6 +1100,7 @@ const bossAiDuval = {
           const meleeDmg = b.phase === 2 ? 18 : 12;
           player.hp -= meleeDmg;
           player.dmgFlash = 0.2;
+          triggerScreenShake(0.3, 0.2);
           b.atkCd = 1.0;
           const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(5);
           player.vel.copy(kd);
