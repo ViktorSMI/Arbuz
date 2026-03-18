@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { scene } from './scene.js';
 import { getTerrainHeight } from './terrain.js';
 import { player } from './player.js';
+import { sfxPickup } from './music.js';
 
 export const seeds = [];
 
@@ -54,6 +55,7 @@ export function updateSeeds(dt) {
     const dist = Math.sqrt(dx * dx + dz * dz);
     if (dist < 2) {
       player.seeds++;
+      sfxPickup();
       scene.remove(s.mesh);
       seeds.splice(i, 1);
       continue;

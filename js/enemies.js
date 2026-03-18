@@ -4,6 +4,7 @@ import { scene } from './scene.js';
 import { getTerrainHeight } from './terrain.js';
 import { player } from './player.js';
 import { spawnParticles } from './particles.js';
+import { sfxHit, sfxEnemyAttack } from './music.js';
 
 let audioCtx = null;
 let sfxGain = null;
@@ -248,7 +249,9 @@ export function updateEnemyAI(dt) {
         const lungeZ = (dz / dist) * 2;
         e.vel.x += lungeX;
         e.vel.z += lungeZ;
+        sfxEnemyAttack();
         if (player.invuln <= 0) {
+          sfxHit();
           player.hp -= e.type.dmg;
           player.dmgFlash = 0.2;
           spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0xc62828, 6, 4);

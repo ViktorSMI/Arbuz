@@ -17,7 +17,7 @@ import { mouse, pointer, keys, keysJustPressed, lockOn, touch } from './input.js
 import { updateHud, drawMinimap } from './hud.js';
 import { portalState, spawnPortal, updatePortal, removePortal } from './portal.js';
 import { spawnSeed, updateSeeds, clearSeeds } from './seeds.js';
-import { startMusic, switchToBossMusic, switchToExploreMusic, sfxJump, sfxLand, sfxAttack, sfxDodge, sfxHit, sfxDeath, sfxEnemyHit, sfxNpcBabble, sfxLevelUp, sfxPickup } from './music.js';
+import { startMusic, switchToBossMusic, switchToExploreMusic, sfxJump, sfxLand, sfxAttack, sfxDodge, sfxHit, sfxDeath, sfxEnemyHit, sfxNpcBabble, sfxLevelUp, sfxPickup, sfxSplash, sfxPortalEnter, sfxQuestComplete } from './music.js';
 import { npcs, spawnNpcs, clearNpcs, updateNpcs, getNearestNpc, interactNpc, hitNpc } from './npc.js';
 
 spawnEnemies();
@@ -33,6 +33,7 @@ let lockActive = false;
 
 let dialogueOpen = false;
 let dialogueNpc = null;
+let wasInWater = false;
 
 const lockReticle = document.getElementById('lock-reticle');
 const npcPrompt = document.getElementById('npc-prompt');
@@ -69,6 +70,8 @@ document.getElementById('btn-respawn').addEventListener('click', () => {
   player.pos.set(0, getTerrainHeight(0, 0), 0);
   player.vel.set(0, 0, 0);
   resetBoss();
+  bossState.bossDefeated = false;
+  setupArena();
   switchToExploreMusic();
   if (!touch.active) renderer.domElement.requestPointerLock();
 });
@@ -208,6 +211,8 @@ function update() {
 
   const th0 = getTerrainHeight(player.pos.x, player.pos.z);
   const inWater = th0 < WATER_LEVEL && player.pos.y < WATER_LEVEL + 1;
+  if (inWater && !wasInWater) sfxSplash();
+  wasInWater = inWater;
 
   const sprinting = keys['KeyR'] && moving && player.stamina > 1 && !inWater;
   const swimFactor = inWater ? 0.45 : 1;
@@ -318,6 +323,7 @@ function update() {
         e.hp -= dmg;
         e.flashTimer = 0.15;
         e.stunTimer = 0.3;
+        sfxEnemyHit();
         const knockDir = new THREE.Vector3(ex - player.pos.x, 0, ez - player.pos.z).normalize();
         e.vel.copy(knockDir.multiplyScalar(8));
         e.vel.y = 3;
@@ -370,9 +376,11 @@ function update() {
             npcRewardEl.textContent = result.reward;
             npcRewardEl.style.display = 'block';
             spawnParticles(player.pos.clone().setY(player.pos.y + 1.5), 0x4caf50, 20, 8);
+            sfxQuestComplete();
           } else {
             npcRewardEl.style.display = 'none';
           }
+          sfxNpcBabble();
           setTimeout(() => {
             dialogueOpen = false;
             dialogueNpc = null;
@@ -381,6 +389,7 @@ function update() {
           }, 2500);
         } else {
           npcDialogueText.textContent = result.text;
+          sfxNpcBabble();
         }
       } else {
         dialogueOpen = false;
@@ -399,6 +408,7 @@ function update() {
       npcDialogueText.textContent = result.text;
       npcDialogueEl.style.display = 'block';
       npcRewardEl.style.display = 'none';
+      sfxNpcBabble();
     }
   } else {
     npcPrompt.style.display = 'none';
@@ -426,6 +436,7 @@ function update() {
     if (portalDist < 5) {
       portalPrompt.style.display = 'block';
       if (keys['KeyE']) {
+        sfxPortalEnter();
         removePortal();
         clearEnemies();
         clearSeeds();
@@ -460,6 +471,7 @@ function update() {
     player.xpToNext = Math.floor(player.xpToNext * 1.5);
     upgradePanel.style.display = 'flex';
     document.exitPointerLock();
+    sfxLevelUp();
   }
 
   updateEnemyAI(dt);
@@ -575,6 +587,7 @@ function update() {
     const landImpact = Math.min(1, Math.abs(player._prevVelY || 0) / 12);
     if (landImpact > 0.15 && (player._wasAirborne)) {
       playerMesh.scale.set(1 + landImpact * 0.2, 1 - landImpact * 0.15, 1 + landImpact * 0.2);
+      sfxLand(landImpact);
       player._wasAirborne = false;
     }
   }

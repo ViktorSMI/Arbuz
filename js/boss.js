@@ -4,6 +4,7 @@ import { scene } from './scene.js';
 import { getTerrainHeight } from './terrain.js';
 import { player } from './player.js';
 import { spawnParticles } from './particles.js';
+import { sfxBossSlam, sfxBossCharge, sfxBossSwipe, sfxBossHit, sfxHit, sfxBossDefeat } from './music.js';
 
 export const bossState = {
   bossObj: null,
@@ -432,6 +433,7 @@ export function updateBoss(dt) {
       b.chargeTimer = 0.8;
       b.state = 'charge';
       b.spinAngle = 0;
+      sfxBossCharge();
     } else if (b.nextAttack === 'slam') {
       b.slamJumping = false;
       b.slamLanding = true;
@@ -439,6 +441,7 @@ export function updateBoss(dt) {
       b.mesh.rotation.x = 0;
       b.mesh.scale.set(1, 1, 1);
     } else if (b.nextAttack === 'swipe') {
+      sfxBossSwipe();
       spawnParticles(new THREE.Vector3(b.x + Math.sin(b.facing) * 3, b.y + 2, b.z + Math.cos(b.facing) * 3), 0xffab00, 8, 6);
       b.swipeLunging = true;
       b.swipeLungeTimer = 0.35;
@@ -460,10 +463,12 @@ export function updateBoss(dt) {
       b.mesh.scale.set(1, 1, 1);
       b.mesh.rotation.x = 0;
       b.slamCd = b.phase === 2 ? 2 : 3;
+      sfxBossSlam();
       spawnParticles(new THREE.Vector3(b.x, b.y + 0.5, b.z), 0x8d6e63, 25, 12);
       spawnParticles(new THREE.Vector3(b.x, b.y + 0.5, b.z), 0xff6f00, 15, 8);
       spawnParticles(new THREE.Vector3(b.x, b.y + 1, b.z), 0xfdd835, 10, 6);
       if (dist < 9 && player.invuln <= 0) {
+        sfxHit();
         player.hp -= (b.phase === 2 ? 35 : 25);
         player.dmgFlash = 0.3;
         player.vel.y = 10;
@@ -487,6 +492,7 @@ export function updateBoss(dt) {
     b.mesh.position.y = b.y + Math.max(0, b.vel.y * b.swipeLungeTimer);
     spawnParticles(new THREE.Vector3(b.x, b.y + 2, b.z), 0xffab00, 2, 3);
     if (dist < 5 && player.invuln <= 0) {
+      sfxHit();
       player.hp -= (b.phase === 2 ? 22 : 15);
       player.dmgFlash = 0.2;
       const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(8);
@@ -517,6 +523,7 @@ export function updateBoss(dt) {
     spawnParticles(new THREE.Vector3(b.x, b.y + 2, b.z), 0xff1744, 1, 3);
     if (dist < 4) {
       if (player.invuln <= 0) {
+        sfxHit();
         player.hp -= (b.phase === 2 ? 35 : 25);
         player.dmgFlash = 0.3;
         const kd = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(12);
@@ -606,6 +613,7 @@ export function hitBoss(dmg) {
     b.hp -= dmg;
     b.flashTimer = 0.15;
     b.stunTimer = 0.2;
+    sfxBossHit();
     const kd = new THREE.Vector3(b.x - player.pos.x, 0, b.z - player.pos.z).normalize();
     b.vel.copy(kd.multiplyScalar(3));
     spawnParticles(new THREE.Vector3(b.x, b.y + 3, b.z), 0xff1744, 8, 5);
@@ -617,6 +625,7 @@ export function hitBoss(dmg) {
       player.xp += b.xpReward;
       player.kills++;
       spawnParticles(new THREE.Vector3(b.x, b.y + 3, b.z), 0xfdd835, 30, 10);
+      sfxBossDefeat();
     }
   }
 }

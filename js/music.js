@@ -244,9 +244,8 @@ export function startMusic(locationIndex) {
 
 export function switchToBossMusic() {
   initAudio();
-  if (!bossActive) {
-    startBossLoop();
-  }
+  stopBossLoop();
+  startBossLoop();
   fadeTo(exploreGain, 0, 1500);
   fadeTo(bossGain, 1, 1500);
 }
@@ -258,6 +257,7 @@ export function switchToExploreMusic() {
   }
   fadeTo(bossGain, 0, 2000);
   fadeTo(exploreGain, 1, 2000);
+  setTimeout(() => stopBossLoop(), 2100);
 }
 
 export function stopMusic() {
@@ -415,4 +415,49 @@ export function sfxPickup() {
   initSfxCtx();
   sfxNote(600, 0.08, 'sine', 0.2);
   sfxNote(800, 0.1, 'sine', 0.15);
+}
+
+export function sfxBossDefeat() {
+  initSfxCtx();
+  sfxNote(200, 0.2, 'sawtooth', 0.3);
+  setTimeout(() => sfxNote(300, 0.2, 'sawtooth', 0.3), 120);
+  setTimeout(() => sfxNote(400, 0.2, 'triangle', 0.25), 240);
+  setTimeout(() => sfxNote(500, 0.2, 'triangle', 0.25), 360);
+  setTimeout(() => sfxNote(600, 0.3, 'sine', 0.3), 480);
+  setTimeout(() => sfxNote(800, 0.4, 'sine', 0.35), 600);
+}
+
+export function sfxSplash() {
+  initSfxCtx();
+  sfxNoise(0.15, 0.2);
+  sfxNote(120, 0.2, 'sine', 0.15);
+  sfxNote(80, 0.15, 'triangle', 0.1);
+}
+
+export function sfxEnemyAttack() {
+  initSfxCtx();
+  sfxNoise(0.06, 0.15);
+  sfxNote(200, 0.08, 'square', 0.12);
+}
+
+export function sfxNpcAttack() {
+  initSfxCtx();
+  sfxNote(280, 0.1, 'square', 0.18);
+  sfxNote(180, 0.12, 'sawtooth', 0.12);
+}
+
+export function sfxPortalEnter() {
+  initSfxCtx();
+  sfxNote(400, 0.3, 'sine', 0.25);
+  setTimeout(() => sfxNote(600, 0.3, 'sine', 0.2), 100);
+  setTimeout(() => sfxNote(800, 0.4, 'sine', 0.25), 200);
+  setTimeout(() => sfxNote(1000, 0.5, 'sine', 0.2), 300);
+}
+
+export function sfxQuestComplete() {
+  initSfxCtx();
+  sfxNote(523, 0.12, 'sine', 0.2);
+  setTimeout(() => sfxNote(659, 0.12, 'sine', 0.2), 80);
+  setTimeout(() => sfxNote(784, 0.12, 'sine', 0.25), 160);
+  setTimeout(() => sfxNote(1047, 0.25, 'sine', 0.3), 240);
 }

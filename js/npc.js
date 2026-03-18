@@ -4,6 +4,7 @@ import { scene } from './scene.js';
 import { getTerrainHeight } from './terrain.js';
 import { player } from './player.js';
 import { spawnParticles } from './particles.js';
+import { sfxHit, sfxNpcAttack } from './music.js';
 
 const NPC_DEFS = [
   {
@@ -322,7 +323,9 @@ export function updateNpcs(dt) {
         n.z += (dz / dist) * 5 * dt;
       }
       if (dist < 2.5 && n.atkCd <= 0) {
+        sfxNpcAttack();
         if (player.invuln <= 0) {
+          sfxHit();
           player.hp -= 12;
           player.dmgFlash = 0.2;
           spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0xc62828, 5, 3);
