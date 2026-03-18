@@ -156,4 +156,8 @@ if (isMobile) {
     () => { keys['KeyR'] = true; },
     () => { keys['KeyR'] = false; }
   );
+  touchBtn('touch-interact',
+    () => { if (!keys['KeyE']) keysJustPressed['KeyE'] = true; keys['KeyE'] = true; },
+    () => { keys['KeyE'] = false; }
+  );
 }
