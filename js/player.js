@@ -164,6 +164,7 @@ export const player = {
   animTime: 0,
   xp: 0, level: 1, xpToNext: 50,
   kills: 0,
+  seeds: 0,
   upgrades: { hp: 0, damage: 0, stamina: 0, speed: 0 },
 };
 

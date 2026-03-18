@@ -1,6 +1,6 @@
 import { player, camState } from './player.js';
 import { enemies } from './enemies.js';
-import { bossState } from './boss.js';
+import { bossState, getBossDef } from './boss.js';
 import { obstacles } from './world.js';
 import { WORLD_SIZE, BOSS_ARENA_POS, BOSS_ARENA_R, ENEMY_COUNT } from './constants.js';
 
@@ -21,22 +21,26 @@ const mctx = minimapCanvas.getContext('2d');
 minimapCanvas.width = 160;
 minimapCanvas.height = 160;
 
+const seedsEl = document.getElementById('seeds-counter');
+
 export function updateHud(lastTarget, targetShowTimer, gameLocation) {
   hpFill.style.width = Math.max(0, player.hp / player.maxHp * 100) + '%';
   stamFill.style.width = Math.max(0, player.stamina / player.maxStamina * 100) + '%';
   xpFill.style.width = Math.max(0, player.xp / player.xpToNext * 100) + '%';
   levelDisp.textContent = 'Ур. ' + player.level;
   killCounter.textContent = 'Убийств: ' + player.kills + ' / ' + ENEMY_COUNT;
+  if (seedsEl) seedsEl.textContent = '🌰 Семечки: ' + player.seeds;
 
+  const def = getBossDef(bossState.currentBossIndex);
   if (bossState.bossDefeated) {
     compassEl.textContent = '🍉 Локация ' + gameLocation;
   } else if (bossState.bossActive && bossState.bossObj && bossState.bossObj.alive) {
-    compassEl.textContent = '💀 ХРУЩ — БОСС';
+    compassEl.textContent = '💀 ' + def.name + ' — БОСС';
   } else {
     const bdx = BOSS_ARENA_POS.x - player.pos.x;
     const bdz = BOSS_ARENA_POS.z - player.pos.z;
     const bDist = Math.floor(Math.sqrt(bdx * bdx + bdz * bdz));
-    compassEl.textContent = '⚔️ Логово Хруща — ' + bDist + 'м';
+    compassEl.textContent = '⚔️ Логово ' + def.name + ' — ' + bDist + 'м';
   }
 
   if (lastTarget && lastTarget.alive && targetShowTimer > 0) {
@@ -50,7 +54,7 @@ export function updateHud(lastTarget, targetShowTimer, gameLocation) {
   const b = bossState.bossObj;
   if (b && b.alive && bossState.bossActive) {
     bossHpEl.style.display = 'block';
-    bossNameEl.textContent = '🪲 ХРУЩ' + (b.phase === 2 ? ' — ЯРОСТЬ' : '');
+    bossNameEl.textContent = def.emoji + ' ' + def.name + (b.phase === 2 ? ' — ЯРОСТЬ' : '');
     bossHpFill.style.width = Math.max(0, b.hp / b.maxHp * 100) + '%';
   } else {
     bossHpEl.style.display = 'none';

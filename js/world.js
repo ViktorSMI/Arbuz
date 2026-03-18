@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WORLD_SIZE, TREE_COUNT, ROCK_COUNT, CRATE_COUNT } from './constants.js';
+import { WORLD_SIZE, TREE_COUNT, ROCK_COUNT, CRATE_COUNT, WATER_LEVEL } from './constants.js';
 import { scene, sunLight } from './scene.js';
 import { getTerrainHeight } from './terrain.js';
 
@@ -13,6 +13,7 @@ for (let i = 0; i < 3000; i++) {
   const gx = (Math.random() - 0.5) * WORLD_SIZE * 0.9;
   const gz = (Math.random() - 0.5) * WORLD_SIZE * 0.9;
   const gy = getTerrainHeight(gx, gz);
+  if (gy < WATER_LEVEL + 0.5) { continue; }
   dummy.position.set(gx, gy + 0.35, gz);
   dummy.rotation.set(0, Math.random() * Math.PI, 0);
   dummy.scale.set(0.8 + Math.random() * 0.6, 0.6 + Math.random() * 0.8, 1);
@@ -40,6 +41,7 @@ for (let i = 0; i < TREE_COUNT; i++) {
   const dc = Math.sqrt(tx * tx + tz * tz);
   if (dc < 15) continue;
   const ty = getTerrainHeight(tx, tz);
+  if (ty < WATER_LEVEL + 0.5) continue;
   const scale = 0.7 + Math.random() * 0.8;
   const group = new THREE.Group();
   const trunk = new THREE.Mesh(trunkGeo, trunkMats[i % 2]);
@@ -64,6 +66,7 @@ for (let i = 0; i < ROCK_COUNT; i++) {
   const rz = (Math.random() - 0.5) * WORLD_SIZE * 0.85;
   const dc = Math.sqrt(rx * rx + rz * rz); if (dc < 12) continue;
   const ry = getTerrainHeight(rx, rz);
+  if (ry < WATER_LEVEL + 0.3) continue;
   const s = 0.5 + Math.random() * 1.5;
   const rock = new THREE.Mesh(rockGeo, rockMat);
   rock.position.set(rx, ry + s * 0.4, rz);
@@ -83,6 +86,7 @@ for (let i = 0; i < CRATE_COUNT; i++) {
   const cz = (Math.random() - 0.5) * WORLD_SIZE * 0.7;
   const dc = Math.sqrt(cx * cx + cz * cz); if (dc < 10) continue;
   const cy = getTerrainHeight(cx, cz);
+  if (cy < WATER_LEVEL + 0.3) continue;
   const crate = new THREE.Mesh(crateGeo, crateMat);
   crate.position.set(cx, cy + 0.75, cz);
   crate.rotation.y = Math.random() * Math.PI;

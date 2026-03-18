@@ -4,18 +4,20 @@ import {
   DODGE_SPEED, DODGE_DURATION, DODGE_IFRAMES, DODGE_COST,
   ATTACK_COST, STAMINA_REGEN, STAMINA_REGEN_DELAY,
   ATTACK_RANGE, ATTACK_DMG, ATTACK_CD, COMBO_WINDOW,
-  CAM_SENSITIVITY, BOSS_ARENA_POS, BOSS_ARENA_R,
+  CAM_SENSITIVITY, BOSS_ARENA_POS, BOSS_ARENA_R, WATER_LEVEL,
 } from './constants.js';
 import { scene, renderer, camera } from './scene.js';
 import { getTerrainHeight } from './terrain.js';
 import { obstacles } from './world.js';
 import { player, playerMesh, camState } from './player.js';
 import { enemies, spawnEnemies, clearEnemies, updateEnemyAI } from './enemies.js';
-import { bossState, spawnBoss, updateBoss, hitBoss, resetBoss } from './boss.js';
+import { bossState, spawnBoss, updateBoss, hitBoss, resetBoss, setupArena, getBossDef } from './boss.js';
 import { spawnParticles, updateParticles } from './particles.js';
-import { mouse, pointer, keys, keysJustPressed } from './input.js';
+import { mouse, pointer, keys, keysJustPressed, lockOn } from './input.js';
 import { updateHud, drawMinimap } from './hud.js';
 import { portalState, spawnPortal, updatePortal, removePortal } from './portal.js';
+import { spawnSeed, updateSeeds, clearSeeds } from './seeds.js';
+import { startMusic, switchToBossMusic, switchToExploreMusic } from './music.js';
 
 spawnEnemies();
 
@@ -23,6 +25,11 @@ let gameStarted = false;
 let gameLocation = 1;
 let lastTarget = null;
 let targetShowTimer = 0;
+
+let lockTarget = null;
+let lockActive = false;
+
+const lockReticle = document.getElementById('lock-reticle');
 
 const slashGeo = new THREE.TorusGeometry(1.5, 0.08, 4, 16, Math.PI * 0.6);
 const slashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
@@ -40,6 +47,7 @@ document.getElementById('btn-play').addEventListener('click', () => {
   blocker.style.display = 'none';
   gameStarted = true;
   player.pos.set(0, getTerrainHeight(0, 0), 0);
+  startMusic(0);
 });
 
 document.getElementById('btn-respawn').addEventListener('click', () => {
@@ -91,8 +99,70 @@ function update() {
     return;
   }
 
-  camState.yaw -= mouse.dx * CAM_SENSITIVITY;
-  camState.pitch = Math.max(0.05, Math.min(1.2, camState.pitch + mouse.dy * CAM_SENSITIVITY));
+  const clampedDx = mouse.dx;
+  const clampedDy = mouse.dy;
+
+  if (!lockActive) {
+    camState.yaw -= clampedDx * CAM_SENSITIVITY;
+  }
+  camState.pitch = Math.max(0.05, Math.min(1.2, camState.pitch + clampedDy * CAM_SENSITIVITY));
+
+  if (lockOn.toggled) {
+    lockOn.toggled = false;
+    if (lockActive) {
+      lockActive = false;
+      lockTarget = null;
+    } else {
+      let bestE = null, bestD = Infinity;
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        const dx2 = e.x - player.pos.x, dz2 = e.z - player.pos.z;
+        const d = Math.sqrt(dx2 * dx2 + dz2 * dz2);
+        if (d < 30 && d < bestD) { bestD = d; bestE = e; }
+      }
+      if (bestE) { lockTarget = bestE; lockActive = true; }
+    }
+  }
+
+  if (lockActive && lockTarget) {
+    if (!lockTarget.alive) {
+      lockActive = false; lockTarget = null;
+    } else {
+      const tdx = lockTarget.x - player.pos.x, tdz = lockTarget.z - player.pos.z;
+      const tDist = Math.sqrt(tdx * tdx + tdz * tdz);
+      if (tDist > 40) { lockActive = false; lockTarget = null; }
+    }
+  }
+
+  if (lockActive && lockTarget && (Math.abs(clampedDx) > 30)) {
+    const camRight2 = new THREE.Vector3(Math.cos(camState.yaw), 0, -Math.sin(camState.yaw));
+    const dir = clampedDx > 0 ? 1 : -1;
+    let bestE2 = null, bestAngle = Infinity;
+    for (const e of enemies) {
+      if (!e.alive || e === lockTarget) continue;
+      const dx2 = e.x - player.pos.x, dz2 = e.z - player.pos.z;
+      const d = Math.sqrt(dx2 * dx2 + dz2 * dz2);
+      if (d > 30) continue;
+      const toE = new THREE.Vector3(dx2, 0, dz2).normalize();
+      const dot = toE.dot(camRight2) * dir;
+      if (dot > 0.1 && dot < bestAngle) { bestAngle = dot; bestE2 = e; }
+    }
+    if (bestE2) lockTarget = bestE2;
+  }
+
+  if (lockActive && lockTarget) {
+    const lx = lockTarget.x - player.pos.x;
+    const lz = lockTarget.z - player.pos.z;
+    const targetYaw = Math.atan2(-lx, -lz);
+    let diff = targetYaw - camState.yaw;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    camState.yaw += diff * 0.15;
+    camState.pitch = Math.max(0.15, Math.min(0.8, camState.pitch));
+    lastTarget = lockTarget;
+    targetShowTimer = 1;
+  }
+
   mouse.dx = 0; mouse.dy = 0;
 
   player.yaw = camState.yaw;
@@ -108,8 +178,12 @@ function update() {
   const moving = moveDir.lengthSq() > 0.01;
   if (moving) moveDir.normalize();
 
-  const sprinting = keys['KeyR'] && moving && player.stamina > 1;
-  const spd = sprinting ? PLAYER_SPRINT : player.speed;
+  const th0 = getTerrainHeight(player.pos.x, player.pos.z);
+  const inWater = th0 < WATER_LEVEL && player.pos.y < WATER_LEVEL + 1;
+
+  const sprinting = keys['KeyR'] && moving && player.stamina > 1 && !inWater;
+  const swimFactor = inWater ? 0.45 : 1;
+  const spd = (sprinting ? PLAYER_SPRINT : player.speed) * swimFactor;
   if (sprinting) { player.stamina -= 12 * dt; player.staminaDelay = STAMINA_REGEN_DELAY; }
 
   player.dodgeCd = Math.max(0, player.dodgeCd - dt);
@@ -135,12 +209,23 @@ function update() {
     player.vel.z = moveDir.z * spd;
   }
 
-  if ((keys['Space']) && player.grounded && !player.dodging) {
+  if ((keys['Space']) && player.grounded && !player.dodging && !inWater) {
     player.vel.y = PLAYER_JUMP;
     player.grounded = false;
   }
 
-  player.vel.y -= GRAVITY * dt;
+  if (inWater) {
+    player.vel.y -= GRAVITY * 0.15 * dt;
+    if (keys['Space']) player.vel.y += 8 * dt;
+    player.vel.y *= 0.92;
+    const waterSurf = WATER_LEVEL + 0.3;
+    if (player.pos.y + player.vel.y * dt > waterSurf) {
+      player.pos.y = waterSurf;
+      player.vel.y = 0;
+    }
+  } else {
+    player.vel.y -= GRAVITY * dt;
+  }
 
   player.pos.x += player.vel.x * dt;
   player.pos.z += player.vel.z * dt;
@@ -151,6 +236,8 @@ function update() {
     player.pos.y = th;
     player.vel.y = 0;
     player.grounded = true;
+  } else if (inWater) {
+    player.grounded = false;
   }
 
   const halfW = WORLD_SIZE / 2 - 5;
@@ -211,6 +298,8 @@ function update() {
           spawnParticles(new THREE.Vector3(ex, ey, ez), e.type.color, 15, 6);
           player.xp += e.type.xp;
           player.kills++;
+          const seedCount = 1 + Math.floor(Math.random() * 3);
+          for (let si = 0; si < seedCount; si++) spawnSeed(ex, e.y, ez);
         }
       }
     }
@@ -233,6 +322,7 @@ function update() {
   const bossDistCheck = Math.sqrt((player.pos.x - BOSS_ARENA_POS.x) ** 2 + (player.pos.z - BOSS_ARENA_POS.z) ** 2);
   if (!bossState.bossDefeated && !bossState.bossObj && bossDistCheck < BOSS_ARENA_R + 5) {
     spawnBoss();
+    switchToBossMusic();
   }
   if (bossState.bossObj && bossState.bossObj.alive) {
     updateBoss(dt);
@@ -240,6 +330,7 @@ function update() {
 
   if (bossState.bossDefeated && !portalState.spawned) {
     spawnPortal();
+    switchToExploreMusic();
   }
   updatePortal(dt);
 
@@ -250,14 +341,24 @@ function update() {
       if (keys['KeyE']) {
         removePortal();
         clearEnemies();
+        clearSeeds();
+        resetBoss();
         gameLocation++;
+        bossState.currentBossIndex = gameLocation - 1;
         const nx = (Math.random() - 0.5) * WORLD_SIZE * 0.6;
         const nz = (Math.random() - 0.5) * WORLD_SIZE * 0.6;
         player.pos.set(nx, getTerrainHeight(nx, nz), nz);
         player.vel.set(0, 0, 0);
+        BOSS_ARENA_POS.set(
+          (Math.random() - 0.5) * WORLD_SIZE * 0.4,
+          0,
+          (Math.random() - 0.5) * WORLD_SIZE * 0.4
+        );
+        setupArena();
         spawnEnemies();
         bossState.bossDefeated = false;
         portalPrompt.style.display = 'none';
+        startMusic(gameLocation - 1);
       }
     } else {
       portalPrompt.style.display = 'none';
@@ -274,6 +375,7 @@ function update() {
 
   updateEnemyAI(dt);
   updateParticles(dt);
+  updateSeeds(dt);
 
   targetShowTimer = Math.max(0, targetShowTimer - dt);
 
@@ -343,8 +445,24 @@ function update() {
   const camTerrH = getTerrainHeight(desiredPos.x, desiredPos.z);
   if (desiredPos.y < camTerrH + 1) desiredPos.y = camTerrH + 1;
 
-  camera.position.lerp(desiredPos, 0.12);
+  const lerpFactor = 1 - Math.exp(-8 * dt);
+  camera.position.lerp(desiredPos, lerpFactor);
   camera.lookAt(camTarget);
+  if (lockActive && lockTarget && lockTarget.alive) {
+    const tpos = new THREE.Vector3(lockTarget.x, lockTarget.y + lockTarget.type.r * 1.5, lockTarget.z);
+    const screenPos = tpos.clone().project(camera);
+    const hw = window.innerWidth / 2, hh = window.innerHeight / 2;
+    const sx = (screenPos.x * hw) + hw, sy = (-screenPos.y * hh) + hh;
+    if (screenPos.z > 0 && screenPos.z < 1) {
+      lockReticle.style.display = 'block';
+      lockReticle.style.left = sx + 'px';
+      lockReticle.style.top = sy + 'px';
+    } else {
+      lockReticle.style.display = 'none';
+    }
+  } else {
+    lockReticle.style.display = 'none';
+  }
 
   updateHud(lastTarget, targetShowTimer, gameLocation);
   drawMinimap();

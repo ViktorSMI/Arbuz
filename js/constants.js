@@ -27,5 +27,6 @@ export const ENEMY_COUNT = 40;
 export const TREE_COUNT = 120;
 export const ROCK_COUNT = 60;
 export const CRATE_COUNT = 30;
+export const WATER_LEVEL = -3;
 export const BOSS_ARENA_POS = new THREE.Vector3(120, 0, 120);
 export const BOSS_ARENA_R = 25;
