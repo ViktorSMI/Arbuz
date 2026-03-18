@@ -348,55 +348,82 @@ for (let i = 0; i < TREE_COUNT; i++) {
 }
 
 /* ==================== ROCKS ==================== */
-function createRockGeometry(detail) {
-  const geo = new THREE.DodecahedronGeometry(1, detail);
-  // Лёгкая деформация — без нормализации, просто смещаем каждую вершину
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    const jitter = 0.12;
-    pos.setXYZ(i,
-      x + (Math.random() - 0.5) * jitter,
-      y + (Math.random() - 0.5) * jitter,
-      z + (Math.random() - 0.5) * jitter
-    );
+// Процедурная текстура камня
+function createRockTexture() {
+  const sz = 256;
+  const c = document.createElement('canvas');
+  c.width = sz; c.height = sz;
+  const ctx = c.getContext('2d');
+  // Базовый серый
+  ctx.fillStyle = '#8a8880';
+  ctx.fillRect(0, 0, sz, sz);
+  // Шум зернистости
+  const imgData = ctx.getImageData(0, 0, sz, sz);
+  const px = imgData.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const n = (Math.random() - 0.5) * 50;
+    px[i] = Math.min(255, Math.max(0, px[i] + n));
+    px[i+1] = Math.min(255, Math.max(0, px[i+1] + n * 0.9));
+    px[i+2] = Math.min(255, Math.max(0, px[i+2] + n * 0.8));
   }
-  pos.needsUpdate = true;
-  geo.computeVertexNormals();
-
-  // vertex colors: darker at bottom, lighter on top, random moss
-  const colors = new Float32Array(pos.count * 3);
-  const hasMoss = Math.random() > 0.5;
-  for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i);
-    // base grey, darker at bottom
-    const brightness = 0.5 + (y + 1) * 0.15 + Math.random() * 0.1;
-    let r = brightness, g = brightness, b = brightness;
-    // warm stone tint
-    r += 0.03; b -= 0.02;
-    // moss patches on top vertices
-    if (hasMoss && y > 0.2 && Math.random() > 0.4) {
-      g += 0.08 + Math.random() * 0.1;
-      r -= 0.05;
-      b -= 0.03;
+  ctx.putImageData(imgData, 0, 0);
+  // Трещины
+  for (let i = 0; i < 15; i++) {
+    let x = Math.random() * sz, y = Math.random() * sz;
+    ctx.strokeStyle = `rgba(40,35,30,${0.3 + Math.random() * 0.3})`;
+    ctx.lineWidth = 0.5 + Math.random() * 1.5;
+    ctx.beginPath(); ctx.moveTo(x, y);
+    for (let j = 0; j < 8; j++) {
+      x += (Math.random() - 0.5) * 30;
+      y += (Math.random() - 0.5) * 30;
+      ctx.lineTo(x, y);
     }
-    colors[i * 3] = Math.min(1, Math.max(0, r));
-    colors[i * 3 + 1] = Math.min(1, Math.max(0, g));
-    colors[i * 3 + 2] = Math.min(1, Math.max(0, b));
+    ctx.stroke();
   }
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  return geo;
+  // Пятна лишайника
+  for (let i = 0; i < 20; i++) {
+    const x = Math.random() * sz, y = Math.random() * sz;
+    const r = 5 + Math.random() * 15;
+    const type = Math.random();
+    if (type > 0.5) {
+      ctx.fillStyle = `rgba(80,100,60,${0.15 + Math.random() * 0.15})`; // зелёный мох
+    } else {
+      ctx.fillStyle = `rgba(160,150,100,${0.1 + Math.random() * 0.1})`; // жёлтый лишайник
+    }
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  // Тёмные углубления
+  for (let i = 0; i < 30; i++) {
+    const x = Math.random() * sz, y = Math.random() * sz;
+    const r = 2 + Math.random() * 6;
+    ctx.fillStyle = `rgba(30,28,25,${0.15 + Math.random() * 0.15})`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  // Светлые блики
+  for (let i = 0; i < 25; i++) {
+    const x = Math.random() * sz, y = Math.random() * sz;
+    const r = 2 + Math.random() * 5;
+    ctx.fillStyle = `rgba(200,195,185,${0.1 + Math.random() * 0.12})`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
 }
 
+const rockTex = createRockTexture();
+// Стандартная геометрия БЕЗ деформации — никаких дырок
+const rockGeo = new THREE.DodecahedronGeometry(1, 1);
 const rockMat = new THREE.MeshStandardMaterial({
-  vertexColors: true,
-  roughness: 0.95,
+  map: rockTex,
+  color: 0xaaa898,
+  roughness: 0.92,
   flatShading: true,
 });
 const mossDiscGeo = new THREE.CircleGeometry(0.3, 8);
-const mossMat = new THREE.MeshStandardMaterial({ color: 0x4a7a32, roughness: 0.9, side: THREE.DoubleSide });
+const mossMat = new THREE.MeshStandardMaterial({ color: 0x5a8a3a, roughness: 0.85, side: THREE.DoubleSide });
 const pebbleGeo = new THREE.SphereGeometry(0.08, 5, 4);
-const pebbleMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9, flatShading: true });
+const pebbleMat = new THREE.MeshStandardMaterial({ color: 0x999088, roughness: 0.9, flatShading: true });
 
 for (let i = 0; i < ROCK_COUNT; i++) {
   const rx = (Math.random() - 0.5) * WORLD_SIZE * 0.85;
@@ -406,11 +433,7 @@ for (let i = 0; i < ROCK_COUNT; i++) {
   if (ry < WATER_LEVEL + 0.3) continue;
   const s = 0.5 + Math.random() * 1.5;
 
-  // unique rock geometry per rock
-  const detail = Math.random() > 0.5 ? 1 : 0;
-  const rGeo = createRockGeometry(detail);
-
-  const rock = new THREE.Mesh(rGeo, rockMat);
+  const rock = new THREE.Mesh(rockGeo, rockMat);
   rock.position.set(rx, ry + s * 0.4, rz);
   // scale distortions for variety
   rock.scale.set(
