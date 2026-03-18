@@ -347,10 +347,14 @@ function update() {
 
   const nearNpc = getNearestNpc();
   if (dialogueOpen) {
-    if (keysJustPressed['KeyE']) {
+    if (dialogueNpc && (!dialogueNpc.alive || Math.hypot(dialogueNpc.x - player.pos.x, dialogueNpc.z - player.pos.z) > 6)) {
+      dialogueOpen = false;
+      dialogueNpc = null;
+      npcDialogueEl.style.display = 'none';
+    } else if (keysJustPressed['KeyE']) {
       if (dialogueNpc) {
         const result = interactNpc(dialogueNpc, bossState.bossDefeated);
-        if (result.done || dialogueNpc.dialogueIndex >= dialogueNpc.def.dialogue.length && dialogueNpc.questAccepted) {
+        if (result.done || (dialogueNpc.dialogueIndex >= dialogueNpc.def.dialogue.length && dialogueNpc.questAccepted)) {
           npcDialogueText.textContent = result.text;
           setTimeout(() => {
             dialogueOpen = false;
