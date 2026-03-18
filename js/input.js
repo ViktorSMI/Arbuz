@@ -36,18 +36,30 @@ if (isMobile) {
 
   let camTouchId = null;
   let lastCamX = 0, lastCamY = 0;
+  let joyTouchId = null;
+  let joyCenterX = 0, joyCenterY = 0;
 
-  const halfW = () => window.innerWidth / 2;
+  const btnIds = new Set(['touch-attack', 'touch-dodge', 'touch-jump', 'touch-lock', 'touch-sprint', 'touch-joystick', 'touch-stick']);
+
+  function isBtnTouch(t) {
+    let el = document.elementFromPoint(t.clientX, t.clientY);
+    while (el) {
+      if (el.id && btnIds.has(el.id)) return true;
+      if (el.classList && el.classList.contains('touch-btn')) return true;
+      el = el.parentElement;
+    }
+    return false;
+  }
 
   document.addEventListener('touchstart', e => {
     for (const t of e.changedTouches) {
-      if (t.clientX > halfW() && camTouchId === null) {
+      if (!isBtnTouch(t) && camTouchId === null) {
         camTouchId = t.identifier;
         lastCamX = t.clientX;
         lastCamY = t.clientY;
       }
     }
-  }, { passive: false });
+  }, { passive: true });
 
   document.addEventListener('touchmove', e => {
     e.preventDefault();
@@ -58,12 +70,90 @@ if (isMobile) {
         lastCamX = t.clientX;
         lastCamY = t.clientY;
       }
+      if (t.identifier === joyTouchId) {
+        updateJoystick(t.clientX, t.clientY);
+      }
     }
   }, { passive: false });
 
   document.addEventListener('touchend', e => {
     for (const t of e.changedTouches) {
       if (t.identifier === camTouchId) camTouchId = null;
+      if (t.identifier === joyTouchId) {
+        joyTouchId = null;
+        keys['KeyW'] = false; keys['KeyS'] = false;
+        keys['KeyA'] = false; keys['KeyD'] = false;
+        const stick = document.getElementById('touch-stick');
+        if (stick) { stick.style.left = '40px'; stick.style.top = '40px'; }
+      }
     }
   });
+
+  function updateJoystick(tx, ty) {
+    const dx = tx - joyCenterX, dy = ty - joyCenterY;
+    const maxR = 45;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const clampedDist = Math.min(dist, maxR);
+    const angle = Math.atan2(dy, dx);
+    const cx = Math.cos(angle) * clampedDist;
+    const cy = Math.sin(angle) * clampedDist;
+    const stick = document.getElementById('touch-stick');
+    if (stick) { stick.style.left = (40 + cx) + 'px'; stick.style.top = (40 + cy) + 'px'; }
+    const deadzone = 15;
+    keys['KeyW'] = dy < -deadzone;
+    keys['KeyS'] = dy > deadzone;
+    keys['KeyA'] = dx < -deadzone;
+    keys['KeyD'] = dx > deadzone;
+  }
+
+  const joy = document.getElementById('touch-joystick');
+  if (joy) {
+    joy.addEventListener('touchstart', e => {
+      e.stopPropagation();
+      const t = e.changedTouches[0];
+      joyTouchId = t.identifier;
+      const rect = joy.getBoundingClientRect();
+      joyCenterX = rect.left + rect.width / 2;
+      joyCenterY = rect.top + rect.height / 2;
+      updateJoystick(t.clientX, t.clientY);
+    }, { passive: true });
+  }
+
+  function touchBtn(id, keyDown, keyUp) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('touchstart', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      keyDown();
+    }, { passive: false });
+    el.addEventListener('touchend', e => {
+      e.stopPropagation();
+      keyUp();
+    });
+    el.addEventListener('touchcancel', e => {
+      keyUp();
+    });
+  }
+
+  touchBtn('touch-attack',
+    () => { mouse.down = true; },
+    () => { mouse.down = false; }
+  );
+  touchBtn('touch-dodge',
+    () => { if (!keys['ShiftLeft']) keysJustPressed['ShiftLeft'] = true; keys['ShiftLeft'] = true; },
+    () => { keys['ShiftLeft'] = false; }
+  );
+  touchBtn('touch-jump',
+    () => { keys['Space'] = true; },
+    () => { keys['Space'] = false; }
+  );
+  touchBtn('touch-lock',
+    () => { lockOn.toggled = true; },
+    () => {}
+  );
+  touchBtn('touch-sprint',
+    () => { keys['KeyR'] = true; },
+    () => { keys['KeyR'] = false; }
+  );
 }

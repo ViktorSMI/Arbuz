@@ -13,7 +13,7 @@ import { player, playerMesh, camState } from './player.js';
 import { enemies, spawnEnemies, clearEnemies, updateEnemyAI } from './enemies.js';
 import { bossState, spawnBoss, updateBoss, hitBoss, resetBoss, setupArena, getBossDef } from './boss.js';
 import { spawnParticles, updateParticles } from './particles.js';
-import { mouse, pointer, keys, keysJustPressed, lockOn } from './input.js';
+import { mouse, pointer, keys, keysJustPressed, lockOn, touch } from './input.js';
 import { updateHud, drawMinimap } from './hud.js';
 import { portalState, spawnPortal, updatePortal, removePortal } from './portal.js';
 import { spawnSeed, updateSeeds, clearSeeds } from './seeds.js';
@@ -43,7 +43,7 @@ const portalPrompt = document.getElementById('portal-prompt');
 const lockInfo = document.getElementById('lock-info');
 
 document.getElementById('btn-play').addEventListener('click', () => {
-  renderer.domElement.requestPointerLock();
+  if (!touch.active) renderer.domElement.requestPointerLock();
   blocker.style.display = 'none';
   gameStarted = true;
   player.pos.set(0, getTerrainHeight(0, 0), 0);
@@ -59,17 +59,18 @@ document.getElementById('btn-respawn').addEventListener('click', () => {
   player.vel.set(0, 0, 0);
   resetBoss();
   switchToExploreMusic();
-  renderer.domElement.requestPointerLock();
+  if (!touch.active) renderer.domElement.requestPointerLock();
 });
 
 renderer.domElement.addEventListener('click', () => {
-  if (gameStarted && !pointer.locked) {
+  if (gameStarted && !pointer.locked && !touch.active) {
     renderer.domElement.requestPointerLock();
     if (lockInfo) lockInfo.style.display = 'none';
   }
 });
 
 document.addEventListener('pointerlockchange', () => {
+  if (touch.active) return;
   if (!pointer.locked && player.alive && gameStarted) {
     blocker.style.display = 'none';
     if (lockInfo) lockInfo.style.display = 'block';
@@ -86,7 +87,7 @@ document.querySelectorAll('.upgr-btn').forEach(btn => {
     if (stat === 'stamina') { player.maxStamina += 15; player.stamina = Math.min(player.stamina + 15, player.maxStamina); }
     if (stat === 'speed') { player.speed += 0.5; }
     upgradePanel.style.display = 'none';
-    renderer.domElement.requestPointerLock();
+    if (!touch.active) renderer.domElement.requestPointerLock();
   });
 });
 
