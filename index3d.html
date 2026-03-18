@@ -106,6 +106,12 @@ canvas{display:block}
 <div id="boss-hp"><div class="name"></div><div class="bar-wrap"><div class="bar-fill" style="width:100%"></div></div></div>
 
 <div id="portal-prompt">[E] Перейти в следующую локацию</div>
+<div id="npc-prompt" style="position:fixed;bottom:240px;left:50%;transform:translateX(-50%);color:#fdd835;font-size:1.2rem;font-weight:bold;z-index:10;pointer-events:none;display:none;text-shadow:0 0 8px #fdd83566">[E] Поговорить</div>
+<div id="npc-dialogue" style="position:fixed;bottom:100px;left:50%;transform:translateX(-50%);max-width:500px;width:90%;background:rgba(0,0,0,.85);border:2px solid #fdd835;border-radius:12px;padding:16px 20px;z-index:100;display:none;color:#fff;font-size:1rem;line-height:1.5;text-align:center">
+  <div id="npc-dialogue-name" style="color:#fdd835;font-weight:bold;font-size:1.1rem;margin-bottom:8px"></div>
+  <div id="npc-dialogue-text" style="margin-bottom:12px"></div>
+  <div style="color:#999;font-size:.8rem">[E] Продолжить</div>
+</div>
 <div id="lock-reticle"></div>
 
 <div id="mobile-controls">
@@ -115,6 +121,7 @@ canvas{display:block}
   <div class="touch-btn" id="touch-jump">⬆️</div>
   <div class="touch-btn" id="touch-lock">🎯</div>
   <div class="touch-btn" id="touch-sprint">🏃</div>
+  <div class="touch-btn" id="touch-interact" style="bottom:210px;right:110px">💬</div>
 </div>
 
 <script type="importmap">

@@ -185,6 +185,18 @@ export function clearEnemies() {
 export function updateEnemyAI(dt) {
   initSfx();
   for (const e of enemies) {
+    if (e.dying) {
+      e.deathTimer -= dt;
+      const t = e.deathTimer / 0.5;
+      e.mesh.rotation.x += dt * 12;
+      e.mesh.position.y += dt * 3;
+      e.mesh.scale.setScalar(Math.max(0, t));
+      if (e.deathTimer <= 0) {
+        e.dying = false;
+        e.mesh.visible = false;
+      }
+      continue;
+    }
     if (!e.alive) continue;
     e.flashTimer = Math.max(0, e.flashTimer - dt);
     e.stunTimer = Math.max(0, e.stunTimer - dt);

@@ -18,8 +18,10 @@ import { updateHud, drawMinimap } from './hud.js';
 import { portalState, spawnPortal, updatePortal, removePortal } from './portal.js';
 import { spawnSeed, updateSeeds, clearSeeds } from './seeds.js';
 import { startMusic, switchToBossMusic, switchToExploreMusic } from './music.js';
+import { npcs, spawnNpcs, clearNpcs, updateNpcs, getNearestNpc, interactNpc, hitNpc } from './npc.js';
 
 spawnEnemies();
+spawnNpcs();
 
 let gameStarted = false;
 let gameLocation = 1;
@@ -29,7 +31,14 @@ let targetShowTimer = 0;
 let lockTarget = null;
 let lockActive = false;
 
+let dialogueOpen = false;
+let dialogueNpc = null;
+
 const lockReticle = document.getElementById('lock-reticle');
+const npcPrompt = document.getElementById('npc-prompt');
+const npcDialogueEl = document.getElementById('npc-dialogue');
+const npcDialogueName = document.getElementById('npc-dialogue-name');
+const npcDialogueText = document.getElementById('npc-dialogue-text');
 
 const slashGeo = new THREE.TorusGeometry(1.5, 0.08, 4, 16, Math.PI * 0.6);
 const slashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
@@ -122,6 +131,12 @@ function update() {
         const d = Math.sqrt(dx2 * dx2 + dz2 * dz2);
         if (d < 30 && d < bestD) { bestD = d; bestE = e; }
       }
+      const bo = bossState.bossObj;
+      if (bo && bo.alive) {
+        const bdx = bo.x - player.pos.x, bdz = bo.z - player.pos.z;
+        const bd = Math.sqrt(bdx * bdx + bdz * bdz);
+        if (bd < 40 && bd < bestD) { bestD = bd; bestE = bo; }
+      }
       if (bestE) { lockTarget = bestE; lockActive = true; }
     }
   }
@@ -132,7 +147,8 @@ function update() {
     } else {
       const tdx = lockTarget.x - player.pos.x, tdz = lockTarget.z - player.pos.z;
       const tDist = Math.sqrt(tdx * tdx + tdz * tdz);
-      if (tDist > 40) { lockActive = false; lockTarget = null; }
+      const maxLockDist = lockTarget.type ? 40 : 50;
+      if (tDist > maxLockDist) { lockActive = false; lockTarget = null; }
     }
   }
 
@@ -140,11 +156,14 @@ function update() {
     const camRight2 = new THREE.Vector3(Math.cos(camState.yaw), 0, -Math.sin(camState.yaw));
     const dir = clampedDx > 0 ? 1 : -1;
     let bestE2 = null, bestAngle = Infinity;
-    for (const e of enemies) {
+    const candidates = [...enemies];
+    const bo = bossState.bossObj;
+    if (bo && bo.alive) candidates.push(bo);
+    for (const e of candidates) {
       if (!e.alive || e === lockTarget) continue;
       const dx2 = e.x - player.pos.x, dz2 = e.z - player.pos.z;
       const d = Math.sqrt(dx2 * dx2 + dz2 * dz2);
-      if (d > 30) continue;
+      if (d > 40) continue;
       const toE = new THREE.Vector3(dx2, 0, dz2).normalize();
       const dot = toE.dot(camRight2) * dir;
       if (dot > 0.1 && dot < bestAngle) { bestAngle = dot; bestE2 = e; }
@@ -296,7 +315,8 @@ function update() {
         lastTarget = e; targetShowTimer = 3;
         if (e.hp <= 0) {
           e.alive = false;
-          e.mesh.visible = false;
+          e.dying = true;
+          e.deathTimer = 0.5;
           spawnParticles(new THREE.Vector3(ex, ey, ez), e.type.color, 15, 6);
           player.xp += e.type.xp;
           player.kills++;
@@ -306,6 +326,12 @@ function update() {
       }
     }
     hitBoss(dmg);
+
+    for (const n of npcs) {
+      if (!n.alive) continue;
+      const nd = atkPos.distanceTo(new THREE.Vector3(n.x, n.y + 1.5, n.z));
+      if (nd < ATTACK_RANGE + 1) hitNpc(n, dmg);
+    }
 
     slashMat.opacity = 0.8;
     slashMesh.position.copy(player.pos).add(forward.clone().multiplyScalar(1.5));
@@ -318,6 +344,42 @@ function update() {
     if (player.attackTimer <= 0) player.attacking = false;
   }
   slashMat.opacity = Math.max(0, slashMat.opacity - dt * 4);
+
+  const nearNpc = getNearestNpc();
+  if (dialogueOpen) {
+    if (keysJustPressed['KeyE']) {
+      if (dialogueNpc) {
+        const result = interactNpc(dialogueNpc, bossState.bossDefeated);
+        if (result.done || dialogueNpc.dialogueIndex >= dialogueNpc.def.dialogue.length && dialogueNpc.questAccepted) {
+          npcDialogueText.textContent = result.text;
+          setTimeout(() => {
+            dialogueOpen = false;
+            dialogueNpc = null;
+            npcDialogueEl.style.display = 'none';
+          }, 1500);
+        } else {
+          npcDialogueText.textContent = result.text;
+        }
+      } else {
+        dialogueOpen = false;
+        npcDialogueEl.style.display = 'none';
+      }
+    }
+    npcPrompt.style.display = 'none';
+  } else if (nearNpc && !dialogueOpen) {
+    npcPrompt.style.display = 'block';
+    if (keysJustPressed['KeyE']) {
+      dialogueOpen = true;
+      dialogueNpc = nearNpc;
+      if (!nearNpc.questAccepted) nearNpc._killsAtAccept = player.kills;
+      const result = interactNpc(nearNpc, bossState.bossDefeated);
+      npcDialogueName.textContent = nearNpc.def.name;
+      npcDialogueText.textContent = result.text;
+      npcDialogueEl.style.display = 'block';
+    }
+  } else {
+    npcPrompt.style.display = 'none';
+  }
 
   for (const k in keysJustPressed) delete keysJustPressed[k];
 
@@ -344,6 +406,7 @@ function update() {
         removePortal();
         clearEnemies();
         clearSeeds();
+        clearNpcs();
         resetBoss();
         gameLocation++;
         bossState.currentBossIndex = gameLocation - 1;
@@ -358,6 +421,7 @@ function update() {
         );
         setupArena();
         spawnEnemies();
+        spawnNpcs();
         bossState.bossDefeated = false;
         portalPrompt.style.display = 'none';
         startMusic(gameLocation - 1);
@@ -376,6 +440,7 @@ function update() {
   }
 
   updateEnemyAI(dt);
+  updateNpcs(dt);
   updateParticles(dt);
   updateSeeds(dt);
 
@@ -423,6 +488,9 @@ function update() {
     playerMesh.userData.legR.rotation.x *= 0.85;
     playerMesh.userData.armL.rotation.x *= 0.85;
     playerMesh.userData.armR.rotation.x *= 0.85;
+    player.animTime += dt * 1.5;
+    const idleBreath = Math.sin(player.animTime) * 0.015;
+    playerMesh.scale.set(1 + idleBreath, 1 - idleBreath, 1 + idleBreath);
   }
 
   if (player.attacking) {
@@ -468,7 +536,8 @@ function update() {
   camera.position.lerp(desiredPos, lerpFactor);
   camera.lookAt(camTarget);
   if (lockActive && lockTarget && lockTarget.alive) {
-    const tpos = new THREE.Vector3(lockTarget.x, lockTarget.y + lockTarget.type.r * 1.5, lockTarget.z);
+    const lockR = lockTarget.type ? lockTarget.type.r : 3;
+    const tpos = new THREE.Vector3(lockTarget.x, lockTarget.y + lockR * 1.5, lockTarget.z);
     const screenPos = tpos.clone().project(camera);
     const hw = window.innerWidth / 2, hh = window.innerHeight / 2;
     const sx = (screenPos.x * hw) + hw, sy = (-screenPos.y * hh) + hh;

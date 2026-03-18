@@ -85,42 +85,100 @@ function exploreTickFn() {
   }
 }
 
+function playDrum(freq, dur, vol) {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = freq;
+  g.gain.setValueAtTime(vol, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+  osc.connect(g); g.connect(bossGain);
+  osc.start(ctx.currentTime); osc.stop(ctx.currentTime + dur + 0.02);
+}
+
 function bossTickFn() {
   if (!ctx || !bossActive) return;
   const t = BOSS_TRACKS[currentLocationIndex % BOSS_TRACKS.length];
   const s = t.scale;
   bossBeat++;
+  const feel = t.feel;
 
-  if (bossBeat % 4 === 0) {
-    playNote(bossGain, s[0] / 2, 0.5, 'sawtooth', 0.5);
-    playNote(bossGain, s[0] / 4, 0.3, 'square', 0.3);
-  }
-  if (bossBeat % 2 === 0) {
-    playNote(bossGain, s[Math.floor(Math.random() * 3)] / 2, 0.4, 'sawtooth', 0.35);
-  }
-
-  const note = s[Math.floor(Math.random() * s.length)];
-  playNote(bossGain, note, 0.25, 'square', 0.2);
-
-  if (bossBeat % 3 === 0) {
-    const high = s[Math.floor(Math.random() * s.length)] * 2;
-    playNote(bossGain, high, 0.15, 'sawtooth', 0.25);
-  }
-  if (Math.random() < 0.3) {
-    playNote(bossGain, s[Math.floor(Math.random() * s.length)] * 4, 0.1, 'sine', 0.15);
-  }
-
-  if (bossBeat % 8 === 0) {
-    const noise = ctx.createOscillator();
-    const ng = ctx.createGain();
-    noise.type = 'square';
-    noise.frequency.value = 60 + Math.random() * 40;
-    ng.gain.setValueAtTime(0.15, ctx.currentTime);
-    ng.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-    noise.connect(ng);
-    ng.connect(bossGain);
-    noise.start(ctx.currentTime);
-    noise.stop(ctx.currentTime + 0.15);
+  if (feel === 'heavy') {
+    if (bossBeat % 4 === 0) {
+      playNote(bossGain, s[0] / 4, 0.6, 'sawtooth', 0.55);
+      playDrum(50, 0.15, 0.4);
+    }
+    if (bossBeat % 2 === 0) {
+      playNote(bossGain, s[Math.floor(Math.random() * 2)] / 2, 0.5, 'sawtooth', 0.4);
+      playDrum(70 + Math.random() * 20, 0.1, 0.25);
+    }
+    if (bossBeat % 8 === 0) playNote(bossGain, s[0] / 8, 1.0, 'square', 0.3);
+    if (Math.random() < 0.2) playNote(bossGain, s[Math.floor(Math.random() * 3)], 0.3, 'square', 0.18);
+  } else if (feel === 'swarm') {
+    if (bossBeat % 3 === 0) {
+      playNote(bossGain, s[0] / 2, 0.3, 'sawtooth', 0.35);
+    }
+    const idx = bossBeat % s.length;
+    playNote(bossGain, s[idx], 0.12, 'square', 0.22);
+    if (bossBeat % 2 === 0) {
+      playNote(bossGain, s[(idx + 2) % s.length] * 2, 0.08, 'sawtooth', 0.18);
+    }
+    if (Math.random() < 0.4) {
+      playNote(bossGain, s[Math.floor(Math.random() * s.length)] * 2, 0.06, 'sine', 0.15);
+    }
+    if (bossBeat % 6 === 0) playDrum(90, 0.08, 0.2);
+  } else if (feel === 'aerial') {
+    if (bossBeat % 4 === 0) playNote(bossGain, s[0] / 2, 0.8, 'triangle', 0.3);
+    const sweep = s[Math.floor(Math.random() * s.length)] * 2;
+    playNote(bossGain, sweep, 0.4, 'sine', 0.25);
+    if (bossBeat % 3 === 0) {
+      playNote(bossGain, s[Math.floor(Math.random() * s.length)] * 4, 0.3, 'sine', 0.15);
+    }
+    if (bossBeat % 8 === 0) {
+      playNote(bossGain, s[s.length - 1] * 4, 0.6, 'triangle', 0.2);
+    }
+    if (Math.random() < 0.15) playDrum(60, 0.12, 0.15);
+  } else if (feel === 'toxic') {
+    if (bossBeat % 4 === 0) {
+      playNote(bossGain, s[0] / 2, 0.5, 'sawtooth', 0.4);
+      playNote(bossGain, s[0] / 2 * 1.05, 0.5, 'sawtooth', 0.35);
+    }
+    if (bossBeat % 2 === 0) {
+      const n = s[Math.floor(Math.random() * s.length)];
+      playNote(bossGain, n, 0.3, 'square', 0.2);
+      playNote(bossGain, n * 1.03, 0.3, 'square', 0.15);
+    }
+    if (bossBeat % 6 === 0) playDrum(40, 0.2, 0.3);
+    if (Math.random() < 0.25) playNote(bossGain, s[Math.floor(Math.random() * s.length)] * 3, 0.15, 'sawtooth', 0.12);
+  } else if (feel === 'military') {
+    if (bossBeat % 2 === 0) playDrum(80, 0.08, 0.35);
+    if (bossBeat % 4 === 0) {
+      playDrum(50, 0.12, 0.4);
+      playNote(bossGain, s[0] / 2, 0.4, 'square', 0.35);
+    }
+    if (bossBeat % 4 === 2) playDrum(80, 0.06, 0.3);
+    if (bossBeat % 8 === 0) {
+      playNote(bossGain, s[Math.floor(Math.random() * 3)], 0.5, 'sawtooth', 0.25);
+    }
+    if (bossBeat % 8 === 4) {
+      playNote(bossGain, s[Math.floor(Math.random() * 3)] * 2, 0.3, 'square', 0.2);
+    }
+  } else if (feel === 'finale') {
+    if (bossBeat % 4 === 0) {
+      playNote(bossGain, s[0] / 4, 0.6, 'sawtooth', 0.5);
+      playDrum(45, 0.15, 0.4);
+    }
+    if (bossBeat % 2 === 0) {
+      playNote(bossGain, s[Math.floor(Math.random() * 3)] / 2, 0.4, 'sawtooth', 0.35);
+      playDrum(75 + Math.random() * 30, 0.08, 0.25);
+    }
+    const idx = bossBeat % s.length;
+    playNote(bossGain, s[idx] * 2, 0.15, 'square', 0.2);
+    if (bossBeat % 3 === 0) playNote(bossGain, s[Math.floor(Math.random() * s.length)] * 4, 0.1, 'sine', 0.18);
+    if (bossBeat % 8 === 0) {
+      playNote(bossGain, s[s.length - 1] * 4, 0.5, 'triangle', 0.2);
+      playNote(bossGain, s[0] / 8, 0.8, 'square', 0.25);
+    }
   }
 }
 

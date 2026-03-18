@@ -2,6 +2,7 @@ import { player, camState } from './player.js';
 import { enemies } from './enemies.js';
 import { bossState, getBossDef } from './boss.js';
 import { obstacles } from './world.js';
+import { npcs } from './npc.js';
 import { WORLD_SIZE, BOSS_ARENA_POS, BOSS_ARENA_R, ENEMY_COUNT } from './constants.js';
 
 const hpFill = document.querySelector('#hp-bar .bar-fill');
@@ -109,6 +110,17 @@ export function drawMinimap() {
     mctx.beginPath();
     mctx.arc(amx, amz, BOSS_ARENA_R * scale, 0, Math.PI * 2);
     mctx.stroke();
+  }
+
+  for (const n of npcs) {
+    if (!n.alive) continue;
+    const nmx = cx + (n.x - player.pos.x) * scale;
+    const nmz = cy + (n.z - player.pos.z) * scale;
+    if (nmx < 0 || nmx > w || nmz < 0 || nmz > h) continue;
+    mctx.fillStyle = n.hostile ? '#ff9800' : '#fdd835';
+    mctx.beginPath();
+    mctx.arc(nmx, nmz, 3, 0, Math.PI * 2);
+    mctx.fill();
   }
 
   mctx.fillStyle = '#4caf50';

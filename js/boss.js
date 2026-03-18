@@ -518,6 +518,20 @@ export function updateBoss(dt) {
   b.mesh.position.set(b.x, b.y, b.z);
   b.mesh.rotation.y = b.facing;
 
+  if (!b.animT) b.animT = 0;
+  b.animT += dt;
+  const idleBob = Math.sin(b.animT * 2.5) * 0.15;
+  const breathScale = 1 + Math.sin(b.animT * 3) * 0.02;
+  b.mesh.position.y += idleBob;
+  b.mesh.scale.set(breathScale, breathScale, breathScale);
+  if (b.charging) {
+    b.mesh.rotation.z = Math.sin(b.animT * 20) * 0.15;
+  } else if (b.windupTimer > 0) {
+    /* windup shake handled above */
+  } else {
+    b.mesh.rotation.z *= 0.9;
+  }
+
   if (b.flashTimer > 0) {
     b.mesh.userData.body.material.emissive.set(0xff0000);
     b.mesh.userData.body.material.emissiveIntensity = b.flashTimer * 5;
