@@ -31,6 +31,23 @@ canvas{display:block}
 #death-screen h1{font-size:4rem;color:#c62828;text-shadow:0 0 40px #c6282866;margin-bottom:20px}
 #death-screen button{padding:14px 40px;font-size:1.1rem;font-weight:bold;border:none;border-radius:10px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#4caf50,#2e7d32)}
 #minimap{position:fixed;bottom:16px;right:16px;width:160px;height:160px;border-radius:50%;border:2px solid #4caf50;overflow:hidden;z-index:10;pointer-events:none;background:#111a}
+#xp-bar{position:fixed;top:52px;left:16px;z-index:10;pointer-events:none}
+#xp-bar .bar-wrap{width:200px;height:12px}
+#xp-bar .bar-fill{background:linear-gradient(90deg,#fdd835,#ff8f00)}
+#xp-bar .bar-label{font-size:9px;line-height:12px}
+#level-display{position:fixed;top:68px;left:16px;color:#fdd835;font-size:12px;font-weight:bold;z-index:10;pointer-events:none;text-shadow:0 1px 3px #000}
+#kill-counter{position:fixed;top:84px;left:16px;color:#ef5350;font-size:12px;z-index:10;pointer-events:none;text-shadow:0 1px 3px #000}
+#compass{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:10;pointer-events:none;color:#fff;font-size:13px;text-shadow:0 1px 4px #000;background:rgba(0,0,0,.4);padding:4px 16px;border-radius:20px}
+#upgrade-panel{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:100;flex-direction:column}
+#upgrade-panel h2{color:#fdd835;font-size:2rem;margin-bottom:20px}
+#upgrade-panel .upgr-grid{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;max-width:500px}
+#upgrade-panel .upgr-btn{padding:14px 20px;font-size:.95rem;border:none;border-radius:10px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#4caf50,#2e7d32);min-width:140px;transition:transform .15s}
+#upgrade-panel .upgr-btn:hover{transform:scale(1.05)}
+#upgrade-panel .upgr-btn:disabled{opacity:.4;cursor:default;transform:none}
+#boss-hp{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:10;pointer-events:none;display:none;text-align:center}
+#boss-hp .bar-wrap{width:500px;height:22px;margin:0 auto}
+#boss-hp .bar-fill{background:linear-gradient(90deg,#b71c1c,#ff1744)}
+#boss-hp .name{color:#ff1744;font-size:18px;font-weight:bold;margin-bottom:6px;text-shadow:0 0 10px #ff174466}
 </style>
 </head>
 <body>
@@ -48,6 +65,23 @@ canvas{display:block}
 <div id="enemy-hp"><div class="name"></div><div class="bar-wrap"><div class="bar-fill" style="width:100%;background:linear-gradient(90deg,#c62828,#ef5350)"></div></div></div>
 <div id="death-screen"><h1>ВЫ ПОГИБЛИ</h1><button id="btn-respawn">Возродиться</button></div>
 <canvas id="minimap"></canvas>
+
+<div id="xp-bar"><div class="bar-wrap"><div class="bar-fill" style="width:0%"></div><div class="bar-label">XP</div></div></div>
+<div id="level-display">Ур. 1</div>
+<div id="kill-counter">Убийств: 0 / 40</div>
+<div id="compass">🍉 Исследуй мир</div>
+
+<div id="upgrade-panel">
+  <h2>🍉 УЛУЧШЕНИЕ</h2>
+  <div class="upgr-grid">
+    <button class="upgr-btn" data-stat="hp">❤️ Здоровье</button>
+    <button class="upgr-btn" data-stat="damage">⚔️ Урон</button>
+    <button class="upgr-btn" data-stat="stamina">💪 Стамина</button>
+    <button class="upgr-btn" data-stat="speed">👟 Скорость</button>
+  </div>
+</div>
+
+<div id="boss-hp"><div class="name"></div><div class="bar-wrap"><div class="bar-fill" style="width:100%"></div></div></div>
 
 <script type="importmap">
 {
@@ -90,6 +124,8 @@ const ENEMY_COUNT = 40;
 const TREE_COUNT = 120;
 const ROCK_COUNT = 60;
 const CRATE_COUNT = 30;
+const BOSS_ARENA_POS = new THREE.Vector3(120, 0, 120);
+const BOSS_ARENA_R = 25;
 
 // =========================================================
 //  RENDERER + SCENE + CAMERA
@@ -499,6 +535,7 @@ const player = {
   yaw: 0,
   dodging: false, dodgeTimer: 0, dodgeDir: new THREE.Vector3(),
   dodgeCd: 0,
+  dodgeRollAngle: 0,
   invuln: 0,
   attacking: false, attackTimer: 0, attackCd: 0,
   comboCount: 0, comboTimer: 0,
@@ -506,6 +543,9 @@ const player = {
   speed: PLAYER_SPEED,
   dmgFlash: 0,
   animTime: 0,
+  xp: 0, level: 1, xpToNext: 50,
+  kills: 0,
+  upgrades: {hp:0, damage:0, stamina:0, speed:0},
 };
 
 // =========================================================
@@ -513,7 +553,7 @@ const player = {
 // =========================================================
 const camState = {
   yaw: Math.PI,
-  pitch: -0.2,
+  pitch: 0.3,
   dist: CAM_DIST,
 };
 
@@ -605,6 +645,347 @@ function spawnEnemies(){
 spawnEnemies();
 
 // =========================================================
+//  BOSS — Хрущ
+// =========================================================
+let bossObj = null;
+let bossActive = false;
+let bossDefeated = false;
+
+function createBossMesh(){
+  const g = new THREE.Group();
+  // body
+  const bodyGeo = new THREE.SphereGeometry(2.5, 16, 12);
+  const bodyMat = new THREE.MeshStandardMaterial({color:0x5d4037, roughness:0.7});
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 3;
+  body.castShadow = true;
+  g.add(body);
+  g.userData.body = body;
+
+  // horn
+  const hornGeo = new THREE.ConeGeometry(0.3, 2, 6);
+  const hornMat = new THREE.MeshStandardMaterial({color:0x3e2723, metalness:0.4});
+  const horn = new THREE.Mesh(hornGeo, hornMat);
+  horn.position.set(0, 5.5, 1.5);
+  horn.rotation.x = -0.4;
+  horn.castShadow=true;
+  g.add(horn);
+
+  // mandibles
+  for(let s=-1;s<=1;s+=2){
+    const mGeo = new THREE.ConeGeometry(0.2, 1.2, 4);
+    const m = new THREE.Mesh(mGeo, hornMat);
+    m.position.set(s*0.8, 3.5, 2.2);
+    m.rotation.x = -0.8;
+    m.rotation.z = s*0.3;
+    g.add(m);
+  }
+
+  // eyes (glowing red)
+  const eyeGeo = new THREE.SphereGeometry(0.4, 8, 8);
+  const eyeMat = new THREE.MeshStandardMaterial({color:0xff1744, emissive:0xff0000, emissiveIntensity:0.8});
+  const eL = new THREE.Mesh(eyeGeo, eyeMat);
+  eL.position.set(-0.8, 4, 2);
+  g.add(eL);
+  const eR = new THREE.Mesh(eyeGeo, eyeMat);
+  eR.position.set(0.8, 4, 2);
+  g.add(eR);
+
+  // legs (6 insect legs)
+  const legGeo = new THREE.CylinderGeometry(0.15, 0.12, 2, 6);
+  const legMat = new THREE.MeshStandardMaterial({color:0x4e342e});
+  for(let i=0;i<3;i++){
+    for(let s=-1;s<=1;s+=2){
+      const leg = new THREE.Mesh(legGeo, legMat);
+      leg.position.set(s*2.2, 1, (i-1)*1.2);
+      leg.rotation.z = s*0.6;
+      leg.castShadow=true;
+      g.add(leg);
+    }
+  }
+
+  // armor plates
+  const plateGeo = new THREE.SphereGeometry(2.6, 16, 8, 0, Math.PI*2, 0, Math.PI*0.4);
+  const plateMat = new THREE.MeshStandardMaterial({color:0x3e2723, roughness:0.6, metalness:0.2});
+  const plate = new THREE.Mesh(plateGeo, plateMat);
+  plate.position.y = 3;
+  plate.castShadow=true;
+  g.add(plate);
+
+  return g;
+}
+
+function spawnBoss(){
+  if(bossObj) return;
+  const arenaY = getTerrainHeight(BOSS_ARENA_POS.x, BOSS_ARENA_POS.z);
+  BOSS_ARENA_POS.y = arenaY;
+  const mesh = createBossMesh();
+  mesh.position.set(BOSS_ARENA_POS.x, arenaY, BOSS_ARENA_POS.z);
+  scene.add(mesh);
+  bossObj = {
+    mesh, x:BOSS_ARENA_POS.x, z:BOSS_ARENA_POS.z, y:arenaY,
+    hp:500, maxHp:500,
+    alive:true, facing:0,
+    state:'idle', stateTimer:2,
+    atkCd:0, chargeDir:new THREE.Vector3(),
+    charging:false, chargeTimer:0,
+    slamCd:0, phase:1,
+    flashTimer:0, stunTimer:0,
+    vel: new THREE.Vector3(),
+    windupTimer:0, nextAttack:'',
+  };
+  bossActive=true;
+}
+
+// boss arena visual — ring of pillars
+const arenaY = getTerrainHeight(BOSS_ARENA_POS.x, BOSS_ARENA_POS.z);
+for(let i=0;i<12;i++){
+  const a = i/12*Math.PI*2;
+  const px = BOSS_ARENA_POS.x + Math.cos(a)*BOSS_ARENA_R;
+  const pz = BOSS_ARENA_POS.z + Math.sin(a)*BOSS_ARENA_R;
+  const py = getTerrainHeight(px,pz);
+  const pillar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.6,0.8,6,8),
+    new THREE.MeshStandardMaterial({color:0x616161,roughness:0.9})
+  );
+  pillar.position.set(px,py+3,pz);
+  pillar.castShadow=true;
+  scene.add(pillar);
+}
+// arena floor marker
+const arenaFloor = new THREE.Mesh(
+  new THREE.RingGeometry(BOSS_ARENA_R-1,BOSS_ARENA_R,32),
+  new THREE.MeshBasicMaterial({color:0xc62828,transparent:true,opacity:0.15,side:THREE.DoubleSide})
+);
+arenaFloor.rotation.x=-Math.PI/2;
+arenaFloor.position.set(BOSS_ARENA_POS.x,arenaY+0.1,BOSS_ARENA_POS.z);
+scene.add(arenaFloor);
+
+// Telegraph visuals for boss attacks
+const telegraphChargeMat = new THREE.MeshBasicMaterial({color:0xff1744,transparent:true,opacity:0,side:THREE.DoubleSide});
+const telegraphChargeGeo = new THREE.PlaneGeometry(2,30);
+const telegraphChargeMesh = new THREE.Mesh(telegraphChargeGeo,telegraphChargeMat);
+telegraphChargeMesh.rotation.x=-Math.PI/2;
+telegraphChargeMesh.position.y=0.15;
+scene.add(telegraphChargeMesh);
+
+const telegraphSlamMat = new THREE.MeshBasicMaterial({color:0xff6f00,transparent:true,opacity:0,side:THREE.DoubleSide});
+const telegraphSlamGeo = new THREE.RingGeometry(0.5,8,24);
+const telegraphSlamMesh = new THREE.Mesh(telegraphSlamGeo,telegraphSlamMat);
+telegraphSlamMesh.rotation.x=-Math.PI/2;
+telegraphSlamMesh.position.y=0.15;
+scene.add(telegraphSlamMesh);
+
+const telegraphSwipeMat = new THREE.MeshBasicMaterial({color:0xffab00,transparent:true,opacity:0,side:THREE.DoubleSide});
+const telegraphSwipeGeo = new THREE.RingGeometry(2,5,16,1,0,Math.PI*0.6);
+const telegraphSwipeMesh = new THREE.Mesh(telegraphSwipeGeo,telegraphSwipeMat);
+telegraphSwipeMesh.rotation.x=-Math.PI/2;
+telegraphSwipeMesh.position.y=0.15;
+scene.add(telegraphSwipeMesh);
+
+function updateBoss(dt,forward){
+  const b = bossObj;
+  if(!b||!b.alive)return;
+  b.flashTimer=Math.max(0,b.flashTimer-dt);
+  b.stunTimer=Math.max(0,b.stunTimer-dt);
+  b.atkCd=Math.max(0,b.atkCd-dt);
+  b.slamCd=Math.max(0,b.slamCd-dt);
+  b.windupTimer=Math.max(0,b.windupTimer-dt);
+
+  const dx=player.pos.x-b.x, dz=player.pos.z-b.z;
+  const dist=Math.sqrt(dx*dx+dz*dz);
+  b.facing=Math.atan2(dx,dz);
+
+  // boss only fights inside arena
+  const playerInArena = Math.sqrt((player.pos.x-BOSS_ARENA_POS.x)**2+(player.pos.z-BOSS_ARENA_POS.z)**2) < BOSS_ARENA_R+3;
+  if(!playerInArena){
+    // return to arena center
+    const toCenterX = BOSS_ARENA_POS.x-b.x, toCenterZ = BOSS_ARENA_POS.z-b.z;
+    const toCenterD = Math.sqrt(toCenterX*toCenterX+toCenterZ*toCenterZ);
+    if(toCenterD>2){
+      b.x += (toCenterX/toCenterD)*4*dt;
+      b.z += (toCenterZ/toCenterD)*4*dt;
+    }
+    b.hp = Math.min(b.maxHp, b.hp + 50*dt);
+    b.charging=false;
+    b.windupTimer=0;
+    b.state='idle'; b.stateTimer=1;
+    b.y = getTerrainHeight(b.x,b.z);
+    b.mesh.position.set(b.x,b.y,b.z);
+    b.mesh.rotation.y=b.facing;
+    telegraphChargeMat.opacity=0;
+    telegraphSlamMat.opacity=0;
+    telegraphSwipeMat.opacity=0;
+    return;
+  }
+
+  // leash boss to arena
+  const bossFromCenter = Math.sqrt((b.x-BOSS_ARENA_POS.x)**2+(b.z-BOSS_ARENA_POS.z)**2);
+  if(bossFromCenter > BOSS_ARENA_R-2){
+    const pullX = (BOSS_ARENA_POS.x-b.x)/bossFromCenter;
+    const pullZ = (BOSS_ARENA_POS.z-b.z)/bossFromCenter;
+    b.x += pullX*2;
+    b.z += pullZ*2;
+  }
+
+  // phase 2 at 50% hp
+  if(b.hp<=b.maxHp*0.5 && b.phase===1){
+    b.phase=2;
+    spawnParticles(new THREE.Vector3(b.x,b.y+3,b.z),0xff1744,20,8);
+  }
+
+  if(b.stunTimer>0){ b.vel.x*=0.9; b.vel.z*=0.9; }
+  // windup phase (telegraph)
+  else if(b.windupTimer>0){
+    // boss is winding up, show telegraph, don't move
+    if(b.nextAttack==='charge'){
+      telegraphChargeMat.opacity = 0.25 + Math.sin(b.windupTimer*15)*0.15;
+      const dir = b.chargeDir.clone();
+      telegraphChargeMesh.position.set(b.x+dir.x*15, b.y+0.15, b.z+dir.z*15);
+      telegraphChargeMesh.rotation.y = -Math.atan2(dir.z,dir.x)+Math.PI/2;
+      telegraphChargeMesh.rotation.x = -Math.PI/2;
+      // boss rears back
+      b.mesh.position.y = b.y + Math.sin(b.windupTimer*12)*0.5;
+    } else if(b.nextAttack==='slam'){
+      telegraphSlamMat.opacity = 0.2 + Math.sin(b.windupTimer*15)*0.15;
+      telegraphSlamMesh.position.set(b.x, b.y+0.15, b.z);
+      // boss rises up
+      b.mesh.position.y = b.y + (0.8-b.windupTimer)*4;
+    } else if(b.nextAttack==='swipe'){
+      telegraphSwipeMat.opacity = 0.25 + Math.sin(b.windupTimer*15)*0.15;
+      telegraphSwipeMesh.position.set(b.x, b.y+0.15, b.z);
+      telegraphSwipeMesh.rotation.y = b.facing - Math.PI*0.3;
+      telegraphSwipeMesh.rotation.x = -Math.PI/2;
+      // boss pulls arm back
+      b.mesh.rotation.z = Math.sin(b.windupTimer*10)*0.2;
+    }
+    if(b.windupTimer<=0){
+      // execute the attack
+      telegraphChargeMat.opacity=0;
+      telegraphSlamMat.opacity=0;
+      telegraphSwipeMat.opacity=0;
+      b.mesh.rotation.z=0;
+      if(b.nextAttack==='charge'){
+        b.charging=true;
+        b.chargeTimer=0.8;
+        b.state='charge';
+      } else if(b.nextAttack==='slam'){
+        b.slamCd = b.phase===2?2:3;
+        spawnParticles(new THREE.Vector3(b.x,b.y+0.5,b.z),0x8d6e63,20,10);
+        spawnParticles(new THREE.Vector3(b.x,b.y+0.5,b.z),0xff6f00,10,6);
+        if(dist<8 && player.invuln<=0){
+          player.hp -= (b.phase===2?30:20);
+          player.dmgFlash=0.3;
+          player.vel.y=8;
+          spawnParticles(player.pos.clone().setY(player.pos.y+1),0xc62828,8,4);
+          if(player.hp<=0){ player.alive=false; deathScreen.style.display='flex'; document.exitPointerLock(); }
+        }
+        b.stateTimer=1.5;
+        b.state='idle';
+      } else if(b.nextAttack==='swipe'){
+        spawnParticles(new THREE.Vector3(b.x+Math.sin(b.facing)*3,b.y+2,b.z+Math.cos(b.facing)*3),0xffab00,8,6);
+        if(dist<4.5 && player.invuln<=0){
+          player.hp -= (b.phase===2?20:15);
+          player.dmgFlash=0.2;
+          const kd=new THREE.Vector3(dx,0,dz).normalize().multiplyScalar(6);
+          player.vel.copy(kd); player.vel.y=3;
+          spawnParticles(player.pos.clone().setY(player.pos.y+1),0xc62828,6,4);
+          if(player.hp<=0){ player.alive=false; deathScreen.style.display='flex'; document.exitPointerLock(); }
+        }
+        b.atkCd=1.0;
+        b.state='idle';
+        b.stateTimer=0.8;
+      }
+    }
+  }
+  else if(b.charging){
+    b.chargeTimer-=dt;
+    b.x += b.chargeDir.x*25*dt;
+    b.z += b.chargeDir.z*25*dt;
+    spawnParticles(new THREE.Vector3(b.x,b.y+1,b.z),0x8d6e63,2,3);
+    if(dist<4){
+      if(player.invuln<=0){
+        player.hp -= (b.phase===2?35:25);
+        player.dmgFlash=0.3;
+        const kd=new THREE.Vector3(dx,0,dz).normalize().multiplyScalar(12);
+        player.vel.copy(kd); player.vel.y=6;
+        spawnParticles(player.pos.clone().setY(player.pos.y+1),0xc62828,10,5);
+        if(player.hp<=0){ player.alive=false; deathScreen.style.display='flex'; document.exitPointerLock(); }
+      }
+    }
+    if(b.chargeTimer<=0){ b.charging=false; b.atkCd=1.5; b.state='idle'; b.stateTimer=1; }
+  } else {
+    b.stateTimer-=dt;
+    if(b.stateTimer<=0){
+      if(dist>8 && b.atkCd<=0){
+        // telegraph charge
+        b.windupTimer = b.phase===2?0.6:0.8;
+        b.nextAttack='charge';
+        b.chargeDir.set(dx,0,dz).normalize();
+        b.stateTimer=9;
+      } else if(dist<6 && b.slamCd<=0){
+        // telegraph slam
+        b.windupTimer = b.phase===2?0.6:0.8;
+        b.nextAttack='slam';
+        b.stateTimer=9;
+      } else {
+        // walk toward player
+        const spd = b.phase===2?5:3;
+        b.x += (dx/dist)*spd*dt;
+        b.z += (dz/dist)*spd*dt;
+        b.stateTimer=0.3;
+      }
+    }
+    // telegraph melee swipe
+    if(dist<4.5 && b.atkCd<=0 && b.windupTimer<=0){
+      b.windupTimer = b.phase===2?0.4:0.6;
+      b.nextAttack='swipe';
+    }
+  }
+
+  b.x+=b.vel.x*dt; b.z+=b.vel.z*dt;
+  b.vel.x*=0.9; b.vel.z*=0.9;
+  b.y = getTerrainHeight(b.x,b.z);
+  b.mesh.position.set(b.x,b.y,b.z);
+  b.mesh.rotation.y=b.facing;
+
+  if(b.flashTimer>0){
+    b.mesh.userData.body.material.emissive.set(0xff0000);
+    b.mesh.userData.body.material.emissiveIntensity=b.flashTimer*5;
+  } else {
+    b.mesh.userData.body.material.emissiveIntensity = b.phase===2?0.2:0;
+    if(b.phase===2) b.mesh.userData.body.material.emissive.set(0xff1744);
+  }
+}
+
+function hitBoss(dmg){
+  const b=bossObj;
+  if(!b||!b.alive)return;
+  const atkPos = player.pos.clone();
+  const fwd = new THREE.Vector3(-Math.sin(camState.yaw),0,-Math.cos(camState.yaw));
+  atkPos.add(fwd.multiplyScalar(2));
+  atkPos.y+=1;
+  const d = atkPos.distanceTo(new THREE.Vector3(b.x,b.y+3,b.z));
+  if(d < ATTACK_RANGE + 3){
+    b.hp-=dmg;
+    b.flashTimer=0.15;
+    b.stunTimer=0.2;
+    const kd=new THREE.Vector3(b.x-player.pos.x,0,b.z-player.pos.z).normalize();
+    b.vel.copy(kd.multiplyScalar(3));
+    spawnParticles(new THREE.Vector3(b.x,b.y+3,b.z),0xff1744,8,5);
+    if(b.hp<=0){
+      b.alive=false;
+      b.mesh.visible=false;
+      bossActive=false;
+      bossDefeated=true;
+      player.xp+=200;
+      player.kills++;
+      spawnParticles(new THREE.Vector3(b.x,b.y+3,b.z),0xfdd835,30,10);
+    }
+  }
+}
+
+// =========================================================
 //  PARTICLES
 // =========================================================
 const particles = [];
@@ -672,6 +1053,14 @@ const minimapCanvas = document.getElementById('minimap');
 const mctx = minimapCanvas.getContext('2d');
 minimapCanvas.width = 160;
 minimapCanvas.height = 160;
+const xpFill = document.querySelector('#xp-bar .bar-fill');
+const levelDisp = document.getElementById('level-display');
+const killCounter = document.getElementById('kill-counter');
+const compassEl = document.getElementById('compass');
+const upgradePanel = document.getElementById('upgrade-panel');
+const bossHpEl = document.getElementById('boss-hp');
+const bossHpFill = document.querySelector('#boss-hp .bar-fill');
+const bossNameEl = document.querySelector('#boss-hp .name');
 
 // =========================================================
 //  GAME STARTUP
@@ -685,6 +1074,18 @@ document.getElementById('btn-play').addEventListener('click',()=>{
   player.pos.set(0, getTerrainHeight(0,0), 0);
 });
 
+function resetBoss(){
+  if(bossObj){
+    bossObj.mesh.visible=false;
+    scene.remove(bossObj.mesh);
+  }
+  bossObj=null;
+  bossActive=false;
+  telegraphChargeMat.opacity=0;
+  telegraphSlamMat.opacity=0;
+  telegraphSwipeMat.opacity=0;
+}
+
 document.getElementById('btn-respawn').addEventListener('click',()=>{
   deathScreen.style.display='none';
   player.hp = player.maxHp;
@@ -692,6 +1093,7 @@ document.getElementById('btn-respawn').addEventListener('click',()=>{
   player.alive = true;
   player.pos.set(0,getTerrainHeight(0,0),0);
   player.vel.set(0,0,0);
+  resetBoss();
   renderer.domElement.requestPointerLock();
 });
 
@@ -728,8 +1130,7 @@ function update(){
 
   // —— Camera rotation ——
   camState.yaw -= mouseDX * CAM_SENSITIVITY;
-  camState.pitch += mouseDY * CAM_SENSITIVITY;
-  camState.pitch = Math.max(-1.2,Math.min(0.6,camState.pitch));
+  camState.pitch = Math.max(0.05, Math.min(1.2, camState.pitch + mouseDY * CAM_SENSITIVITY));
   mouseDX=0;mouseDY=0;
 
   // —— Player facing = camera yaw ——
@@ -841,7 +1242,7 @@ function update(){
     // hit check
     const atkPos = player.pos.clone().add(forward.clone().multiplyScalar(2));
     atkPos.y += 1;
-    const dmg = ATTACK_DMG * (1 + (player.comboCount-1)*0.15);
+    const dmg = ATTACK_DMG * (1 + (player.comboCount-1)*0.15) * (1 + player.upgrades.damage*0.25);
     for(const e of enemies){
       if(!e.alive)continue;
       const ex=e.x,ez=e.z,ey=e.y+e.type.r;
@@ -859,9 +1260,12 @@ function update(){
           e.alive=false;
           e.mesh.visible=false;
           spawnParticles(new THREE.Vector3(ex,ey,ez),e.type.color,15,6);
+          player.xp += e.type.xp;
+          player.kills++;
         }
       }
     }
+    hitBoss(dmg);
 
     // slash visual
     slashMat.opacity=0.8;
@@ -878,6 +1282,25 @@ function update(){
 
   // clear just-pressed flags at end of frame input processing
   for(const k in keysJustPressed) delete keysJustPressed[k];
+
+  // —— Boss ——
+  const bossDistCheck = Math.sqrt((player.pos.x-BOSS_ARENA_POS.x)**2+(player.pos.z-BOSS_ARENA_POS.z)**2);
+  if(!bossDefeated && !bossObj && bossDistCheck < BOSS_ARENA_R+5){
+    spawnBoss();
+  }
+  if(bossObj && bossObj.alive){
+    updateBoss(dt,forward);
+  }
+
+  // —— XP / Level ——
+  if(player.xp >= player.xpToNext){
+    player.xp -= player.xpToNext;
+    player.level++;
+    player.xpToNext = Math.floor(player.xpToNext*1.5);
+    // show upgrade panel
+    upgradePanel.style.display='flex';
+    document.exitPointerLock();
+  }
 
   // —— Enemy AI ——
   for(const e of enemies){
@@ -959,7 +1382,17 @@ function update(){
 
   // —— Player mesh update ——
   playerMesh.position.copy(player.pos);
-  playerMesh.rotation.y = player.yaw + Math.PI;
+
+  // dodge roll = kolobok spin
+  if(player.dodging){
+    player.dodgeRollAngle += dt * 18;
+    playerMesh.rotation.set(0, player.yaw + Math.PI, 0);
+    // rotate the whole mesh around local X (forward roll)
+    playerMesh.rotateOnAxis(new THREE.Vector3(1,0,0), player.dodgeRollAngle);
+  } else {
+    player.dodgeRollAngle = 0;
+    playerMesh.rotation.set(0, player.yaw + Math.PI, 0);
+  }
 
   // walk animation
   if(moving && player.grounded && !player.dodging){
@@ -988,13 +1421,13 @@ function update(){
     playerMesh.userData.sword.rotation.x *= 0.8;
   }
 
-  // dodge lean
+  // dodge visual
   if(player.dodging){
-    playerMesh.userData.body.position.y = 0.6;
-    playerMesh.scale.y = 0.7;
+    playerMesh.scale.set(1,0.7,1);
   } else {
-    playerMesh.userData.body.position.y += (1.2-playerMesh.userData.body.position.y)*0.2;
+    playerMesh.scale.x += (1-playerMesh.scale.x)*0.2;
     playerMesh.scale.y += (1-playerMesh.scale.y)*0.2;
+    playerMesh.scale.z += (1-playerMesh.scale.z)*0.2;
   }
 
   // damage flash
@@ -1010,24 +1443,40 @@ function update(){
 
   // —— Camera ——
   const camTarget = player.pos.clone();
-  camTarget.y += CAM_HEIGHT;
+  camTarget.y += 2;
   const camOffset = new THREE.Vector3(
     Math.sin(camState.yaw)*Math.cos(camState.pitch)*camState.dist,
-    Math.sin(camState.pitch)*camState.dist + CAM_HEIGHT,
+    Math.sin(camState.pitch)*camState.dist,
     Math.cos(camState.yaw)*Math.cos(camState.pitch)*camState.dist
   );
   const desiredPos = player.pos.clone().add(camOffset);
+  desiredPos.y += 2;
 
   // prevent camera from going underground
   const camTerrH = getTerrainHeight(desiredPos.x,desiredPos.z);
   if(desiredPos.y < camTerrH+1) desiredPos.y = camTerrH+1;
 
-  camera.position.lerp(desiredPos,0.15);
+  camera.position.lerp(desiredPos,0.12);
   camera.lookAt(camTarget);
 
   // —— HUD ——
   hpFill.style.width = Math.max(0,player.hp/player.maxHp*100)+'%';
   stamFill.style.width = Math.max(0,player.stamina/player.maxStamina*100)+'%';
+  xpFill.style.width = Math.max(0,player.xp/player.xpToNext*100)+'%';
+  levelDisp.textContent = 'Ур. '+player.level;
+  killCounter.textContent = 'Убийств: '+player.kills+' / '+ENEMY_COUNT;
+
+  // compass
+  if(bossDefeated){
+    compassEl.textContent = '🍉 Победа! Хрущ повержен';
+  } else if(bossActive && bossObj && bossObj.alive){
+    compassEl.textContent = '💀 ХРУЩ — БОСС';
+  } else {
+    const bdx = BOSS_ARENA_POS.x - player.pos.x;
+    const bdz = BOSS_ARENA_POS.z - player.pos.z;
+    const bDist = Math.floor(Math.sqrt(bdx*bdx+bdz*bdz));
+    compassEl.textContent = '⚔️ Логово Хруща — '+bDist+'м';
+  }
 
   targetShowTimer = Math.max(0,targetShowTimer-dt);
   if(lastTarget && lastTarget.alive && targetShowTimer>0){
@@ -1036,6 +1485,15 @@ function update(){
     enemyHpFill.style.width=Math.max(0,lastTarget.hp/lastTarget.maxHp*100)+'%';
   } else {
     enemyHpEl.style.display='none';
+  }
+
+  // boss HP bar
+  if(bossObj && bossObj.alive && bossActive){
+    bossHpEl.style.display='block';
+    bossNameEl.textContent='🪲 ХРУЩ'+(bossObj.phase===2?' — ЯРОСТЬ':'');
+    bossHpFill.style.width=Math.max(0,bossObj.hp/bossObj.maxHp*100)+'%';
+  } else {
+    bossHpEl.style.display='none';
   }
 
   // —— Minimap ——
@@ -1072,7 +1530,7 @@ function drawMinimap(){
     mctx.fill();
   }
 
-  // enemies
+  // enemies on minimap
   for(const e of enemies){
     if(!e.alive)continue;
     const mx=cx+(e.x-player.pos.x)*scale;
@@ -1082,6 +1540,29 @@ function drawMinimap(){
     mctx.beginPath();
     mctx.arc(mx,mz,2,0,Math.PI*2);
     mctx.fill();
+  }
+
+  // boss on minimap
+  if(bossObj && bossObj.alive){
+    const bmx=cx+(bossObj.x-player.pos.x)*scale;
+    const bmz=cy+(bossObj.z-player.pos.z)*scale;
+    mctx.fillStyle='#ff1744';
+    mctx.beginPath();
+    mctx.arc(bmx,bmz,5,0,Math.PI*2);
+    mctx.fill();
+    mctx.strokeStyle='#fdd835'; mctx.lineWidth=1;
+    mctx.stroke();
+  }
+
+  // boss arena marker
+  if(!bossDefeated){
+    const amx=cx+(BOSS_ARENA_POS.x-player.pos.x)*scale;
+    const amz=cy+(BOSS_ARENA_POS.z-player.pos.z)*scale;
+    mctx.strokeStyle='#c62828';
+    mctx.lineWidth=1;
+    mctx.beginPath();
+    mctx.arc(amx,amz,BOSS_ARENA_R*scale,0,Math.PI*2);
+    mctx.stroke();
   }
 
   // player
@@ -1121,6 +1602,22 @@ window.addEventListener('resize',()=>{
 // =========================================================
 player.pos.set(0, getTerrainHeight(0,0), 0);
 requestAnimationFrame(update);
+
+// =========================================================
+//  UPGRADE SYSTEM
+// =========================================================
+document.querySelectorAll('.upgr-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const stat = btn.dataset.stat;
+    player.upgrades[stat]++;
+    if(stat==='hp'){ player.maxHp+=20; player.hp=Math.min(player.hp+20,player.maxHp); }
+    if(stat==='damage'){} // applied in attack calc
+    if(stat==='stamina'){ player.maxStamina+=15; player.stamina=Math.min(player.stamina+15,player.maxStamina); }
+    if(stat==='speed'){ player.speed+=0.5; }
+    upgradePanel.style.display='none';
+    renderer.domElement.requestPointerLock();
+  });
+});
 
 </script>
 </body>
