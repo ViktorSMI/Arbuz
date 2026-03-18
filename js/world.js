@@ -154,23 +154,115 @@ grassMesh.instanceMatrix.needsUpdate = true;
 grassMesh.instanceColor = new THREE.InstancedBufferAttribute(grassColors, 3);
 scene.add(grassMesh);
 
+/* ==================== FOLIAGE TEXTURE ==================== */
+function createFoliageTexture(baseHue) {
+  // baseHue: 0=тёмно-зелёный, 1=светло-зелёный, 2=средний, 3=яркий
+  const sz = 256;
+  const c = document.createElement('canvas');
+  c.width = sz; c.height = sz;
+  const ctx = c.getContext('2d');
+
+  // Базовый фон — средне-зелёный
+  const bases = ['#3a7830', '#4a8838', '#2e6828', '#55a045'];
+  ctx.fillStyle = bases[baseHue % bases.length];
+  ctx.fillRect(0, 0, sz, sz);
+
+  // Крупные пятна светлой и тёмной листвы
+  for (let i = 0; i < 60; i++) {
+    const x = Math.random() * sz, y = Math.random() * sz;
+    const r = 8 + Math.random() * 25;
+    const bright = Math.random() > 0.5;
+    if (bright) {
+      const g = 100 + Math.floor(Math.random() * 80);
+      ctx.fillStyle = `rgba(${g - 50},${g + 20},${g - 60},${0.3 + Math.random() * 0.3})`;
+    } else {
+      const g = 20 + Math.floor(Math.random() * 30);
+      ctx.fillStyle = `rgba(${g},${g + 15},${g - 5},${0.2 + Math.random() * 0.25})`;
+    }
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Отдельные листочки — маленькие овалы разных оттенков
+  for (let i = 0; i < 800; i++) {
+    const x = Math.random() * sz, y = Math.random() * sz;
+    const lw = 2 + Math.random() * 5, lh = 3 + Math.random() * 7;
+    const angle = Math.random() * Math.PI;
+    const g = 60 + Math.floor(Math.random() * 120);
+    const r2 = Math.max(10, g - 50 + Math.floor(Math.random() * 20));
+    ctx.fillStyle = `rgba(${r2},${g},${Math.max(5, r2 - 30)},${0.5 + Math.random() * 0.4})`;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, lw, lh, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Жилка листа
+    ctx.strokeStyle = `rgba(${r2 - 20},${g - 20},${Math.max(0, r2 - 40)},0.3)`;
+    ctx.lineWidth = 0.4;
+    ctx.beginPath(); ctx.moveTo(0, -lh); ctx.lineTo(0, lh); ctx.stroke();
+    ctx.restore();
+  }
+
+  // Тёмные просветы/тени в глубине кроны
+  for (let i = 0; i < 100; i++) {
+    const x = Math.random() * sz, y = Math.random() * sz;
+    const r = 2 + Math.random() * 8;
+    ctx.fillStyle = `rgba(10,20,5,${0.15 + Math.random() * 0.2})`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Яркие блики — солнечные пятна
+  for (let i = 0; i < 40; i++) {
+    const x = Math.random() * sz, y = Math.random() * sz;
+    const r = 1 + Math.random() * 4;
+    ctx.fillStyle = `rgba(${180 + Math.floor(Math.random() * 60)},${200 + Math.floor(Math.random() * 50)},${100 + Math.floor(Math.random() * 40)},${0.15 + Math.random() * 0.15})`;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 2);
+  return tex;
+}
+
 /* ==================== TREES ==================== */
 const barkTex = createBarkTexture();
+const foliageTex0 = createFoliageTexture(0);
+const foliageTex1 = createFoliageTexture(1);
+const foliageTex2 = createFoliageTexture(2);
+const foliageTex3 = createFoliageTexture(3);
+
 const trunkMats = [
   new THREE.MeshStandardMaterial({ map: barkTex, roughness: 0.85, color: 0xeeddbb }),
   new THREE.MeshStandardMaterial({ map: barkTex.clone(), roughness: 0.85, color: 0xddccaa }),
 ];
 export const leafMats = [
-  new THREE.MeshStandardMaterial({ color: 0x4CAF50, roughness: 0.7, emissive: 0x1a4a1a, emissiveIntensity: 0.15 }),
-  new THREE.MeshStandardMaterial({ color: 0x66BB6A, roughness: 0.7, emissive: 0x1a5a1a, emissiveIntensity: 0.12 }),
-  new THREE.MeshStandardMaterial({ color: 0x388E3C, roughness: 0.7, emissive: 0x184018, emissiveIntensity: 0.18 }),
-  new THREE.MeshStandardMaterial({ color: 0x81C784, roughness: 0.75, emissive: 0x1a5a1a, emissiveIntensity: 0.1 }),
+  new THREE.MeshStandardMaterial({ map: foliageTex0, color: 0x5CBF60, roughness: 0.75, emissive: 0x1a4a1a, emissiveIntensity: 0.1 }),
+  new THREE.MeshStandardMaterial({ map: foliageTex1, color: 0x72CC76, roughness: 0.75, emissive: 0x1a5a1a, emissiveIntensity: 0.08 }),
+  new THREE.MeshStandardMaterial({ map: foliageTex2, color: 0x48A04C, roughness: 0.75, emissive: 0x184018, emissiveIntensity: 0.12 }),
+  new THREE.MeshStandardMaterial({ map: foliageTex3, color: 0x88D88C, roughness: 0.8, emissive: 0x1a5a1a, emissiveIntensity: 0.06 }),
 ];
 
 const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 4, 8);
-const leafGeo = new THREE.SphereGeometry(2.5, 8, 6);
-const leafGeoSmall = new THREE.SphereGeometry(1.8, 7, 5);
-const leafGeoTiny = new THREE.SphereGeometry(1.3, 6, 5);
+
+// Бугристые кроны — деформированные сферы для естественного вида
+function createBumpySphere(radius, wSeg, hSeg) {
+  const geo = new THREE.SphereGeometry(radius, wSeg, hSeg);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const bump = 1 + Math.sin(x * 3.7 + y * 2.1) * Math.cos(z * 4.3 + x * 1.9) * 0.15
+               + Math.sin(y * 5.3 + z * 3.1) * 0.08;
+    pos.setXYZ(i, x * bump, y * bump, z * bump);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+}
+
+const leafGeo = createBumpySphere(2.5, 10, 8);
+const leafGeoSmall = createBumpySphere(1.8, 9, 7);
+const leafGeoTiny = createBumpySphere(1.3, 8, 6);
 const branchGeo = new THREE.CylinderGeometry(0.06, 0.12, 1.5, 5);
 const rootGeo = new THREE.CylinderGeometry(0.04, 0.14, 1.2, 5);
 const branchMat = new THREE.MeshStandardMaterial({ map: barkTex, roughness: 0.95, color: 0xaa8866 });
