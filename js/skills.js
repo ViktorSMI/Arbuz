@@ -48,17 +48,11 @@ function getPlayerDmgMult() {
 }
 
 function getPlayerForward() {
-  const mesh = player.mesh || player;
-  const dir = new THREE.Vector3(0, 0, -1);
-  dir.applyQuaternion(mesh.quaternion);
-  dir.y = 0;
-  dir.normalize();
-  return dir;
+  return new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
 }
 
 function getPlayerPos() {
-  const mesh = player.mesh || player;
-  return mesh.position.clone();
+  return player.pos.clone();
 }
 
 function damageEnemy(enemy, dmg) {
@@ -83,35 +77,34 @@ function executeDash() {
     const pz = pos.z + dir.z * dashDist * t;
     const py = getTerrainHeight(px, pz) + 1;
 
-    spawnParticles(px, py, pz, 0x4caf50, 3);
+    spawnParticles(new THREE.Vector3(px, py, pz), 0x4caf50, 3, 3);
 
     for (let j = 0; j < enemies.length; j++) {
       const e = enemies[j];
-      if (!e || !e.mesh) continue;
-      const ex = e.mesh.position.x;
-      const ez = e.mesh.position.z;
+      if (!e || !e.alive) continue;
+      const ex = e.x;
+      const ez = e.z;
       const dist = Math.sqrt((px - ex) ** 2 + (pz - ez) ** 2);
       if (dist < 2.0) {
         damageEnemy(e, dmg);
-        spawnParticles(ex, e.mesh.position.y + 1, ez, 0x4caf50, 8);
+        spawnParticles(new THREE.Vector3(ex, e.y + 1, ez), 0x4caf50, 8, 5);
       }
     }
 
-    if (bossState && bossState.mesh && bossState.hp > 0) {
-      const bx = bossState.mesh.position.x;
-      const bz = bossState.mesh.position.z;
-      const dist = Math.sqrt((px - bx) ** 2 + (pz - bz) ** 2);
-      if (dist < 3.0) {
-        bossState.hp -= dmg;
-        spawnParticles(bx, bossState.mesh.position.y + 1, bz, 0x4caf50, 10);
+    const bo = bossState.bossObj;
+      if (bo && bo.alive) {
+        const dist = Math.sqrt((px - bo.x) ** 2 + (pz - bo.z) ** 2);
+        if (dist < 3.0) {
+          bo.hp -= dmg;
+          spawnParticles(new THREE.Vector3(bo.x, bo.y + 3, bo.z), 0x4caf50, 10, 5);
+        }
       }
-    }
   }
 
   const targetPos = pos.clone().add(dir.clone().multiplyScalar(dashDist));
   const terrainY = getTerrainHeight(targetPos.x, targetPos.z);
-  const mesh = player.mesh || player;
-  mesh.position.set(targetPos.x, terrainY, targetPos.z);
+  player.pos.set(targetPos.x, terrainY, targetPos.z);
+  player.vel.set(0, 0, 0);
 }
 
 function executeSlam() {
@@ -135,23 +128,24 @@ function executeSlam() {
   const entity = { mesh: ring, type: 'slam_ring', life: 0.6 };
   activeEntities.push(entity);
 
-  spawnParticles(pos.x, terrainY + 0.5, pos.z, 0xff9800, 30);
+  spawnParticles(new THREE.Vector3(pos.x, terrainY + 0.5, pos.z), 0xff9800, 30, 8);
 
   for (let j = 0; j < enemies.length; j++) {
     const e = enemies[j];
-    if (!e || !e.mesh) continue;
-    const dist = pos.distanceTo(e.mesh.position);
+    if (!e || !e.alive) continue;
+    const dist = Math.sqrt((pos.x - e.x) ** 2 + (pos.z - e.z) ** 2);
     if (dist <= radius) {
       damageEnemy(e, dmg);
-      spawnParticles(e.mesh.position.x, e.mesh.position.y + 1, e.mesh.position.z, 0xff9800, 8);
+      spawnParticles(new THREE.Vector3(e.x, e.y + 1, e.z), 0xff9800, 8, 5);
     }
   }
 
-  if (bossState && bossState.mesh && bossState.hp > 0) {
-    const dist = pos.distanceTo(bossState.mesh.position);
-    if (dist <= radius) {
-      bossState.hp -= dmg;
-      spawnParticles(bossState.mesh.position.x, bossState.mesh.position.y + 1, bossState.mesh.position.z, 0xff9800, 10);
+  const bo2 = bossState.bossObj;
+  if (bo2 && bo2.alive) {
+    const bDist = Math.sqrt((pos.x - bo2.x) ** 2 + (pos.z - bo2.z) ** 2);
+    if (bDist <= radius) {
+      bo2.hp -= dmg;
+      spawnParticles(new THREE.Vector3(bo2.x, bo2.y + 3, bo2.z), 0xff9800, 10, 5);
     }
   }
 }
@@ -199,22 +193,23 @@ function updateEntities(dt) {
 
       for (let j = 0; j < enemies.length; j++) {
         const en = enemies[j];
-        if (!en || !en.mesh) continue;
-        const dist = e.mesh.position.distanceTo(en.mesh.position);
+        if (!en || !en.alive) continue;
+        const dist = Math.sqrt((e.mesh.position.x - en.x) ** 2 + (e.mesh.position.z - en.z) ** 2);
         if (dist < 1.5) {
           damageEnemy(en, e.dmg);
-          spawnParticles(en.mesh.position.x, en.mesh.position.y + 1, en.mesh.position.z, 0x1a1a1a, 10);
+          spawnParticles(new THREE.Vector3(en.x, en.y + 1, en.z), 0x1a1a1a, 10, 5);
           e.hit = true;
           e.life = 0;
           break;
         }
       }
 
-      if (!e.hit && bossState && bossState.mesh && bossState.hp > 0) {
-        const dist = e.mesh.position.distanceTo(bossState.mesh.position);
+      const bo3 = bossState.bossObj;
+      if (!e.hit && bo3 && bo3.alive) {
+        const dist = Math.sqrt((e.mesh.position.x - bo3.x) ** 2 + (e.mesh.position.z - bo3.z) ** 2);
         if (dist < 2.5) {
-          bossState.hp -= e.dmg;
-          spawnParticles(bossState.mesh.position.x, bossState.mesh.position.y + 1, bossState.mesh.position.z, 0x1a1a1a, 10);
+          bo3.hp -= e.dmg;
+          spawnParticles(new THREE.Vector3(bo3.x, bo3.y + 3, bo3.z), 0x1a1a1a, 10, 5);
           e.hit = true;
           e.life = 0;
         }

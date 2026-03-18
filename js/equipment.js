@@ -75,7 +75,7 @@ export function spawnLootDrop(x, y, z, itemType, itemId) {
 }
 
 export function updateLootDrops(dt) {
-  const playerPos = (player.mesh || player).position;
+  const playerPos = player.pos;
 
   for (let i = lootDrops.length - 1; i >= 0; i--) {
     const drop = lootDrops[i];
@@ -92,11 +92,9 @@ export function updateLootDrops(dt) {
       equipItem(drop.itemType, drop.itemId);
 
       spawnParticles(
-        drop.mesh.position.x,
-        drop.mesh.position.y,
-        drop.mesh.position.z,
+        drop.mesh.position.clone(),
         drop.itemDef.color || 0xffffff,
-        15
+        15, 5
       );
 
       scene.remove(drop.mesh);

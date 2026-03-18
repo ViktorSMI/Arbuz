@@ -37,8 +37,7 @@ export function processIncomingDamage(rawDmg, attackerObj) {
 
       attackerObj.stunTimer = 1.0;
 
-      const pos = player.mesh ? player.mesh.position : player.position;
-      spawnParticles(pos.x, pos.y + 1, pos.z, 0xffd700, 20);
+      spawnParticles(player.pos.clone().setY(player.pos.y + 1), 0xffd700, 20, 6);
 
       setTimeout(() => {
         if (parrySuccessTimer <= 0) player.parrySuccess = false;

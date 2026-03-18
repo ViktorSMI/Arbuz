@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export const WORLD_SIZE = 400;
-export const TERRAIN_SEG = 128;
+export const TERRAIN_SEG = 200;
 export const GRAVITY = 28;
 export const PLAYER_SPEED = 8;
 export const PLAYER_SPRINT = 13;

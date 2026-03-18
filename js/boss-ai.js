@@ -54,8 +54,9 @@ const bossAiHrusch = {
         const chargeSpeed = b.phase === 2 ? 30 : 25;
         b.x += b.chargeDir.x * chargeSpeed * dt;
         b.z += b.chargeDir.z * chargeSpeed * dt;
-        b.spinAngle += dt * 18;
-        b.mesh.rotation.x = b.spinAngle;
+        // Наклон вперёд + тряска при чардже
+        b.mesh.rotation.x = 0.5 + Math.sin(b.stateTimer * 30) * 0.15;
+        b.mesh.rotation.z = Math.sin(b.stateTimer * 25) * 0.1;
         // Charge particles
         spawnParticles(new THREE.Vector3(b.x, b.y + 1, b.z), 0x8d6e63, 2, 4);
 
@@ -77,7 +78,7 @@ const bossAiHrusch = {
 
         if (b.stateTimer <= 0) {
           b.mesh.rotation.x = 0;
-          b.spinAngle = 0;
+          b.mesh.rotation.z = 0;
           b.state = 'recover';
           b.stateTimer = 1.5;
         }
@@ -246,7 +247,10 @@ const bossAiSharlotta = {
           b.x += (dx / dist) * lungeSpeed * dt;
           b.z += (dz / dist) * lungeSpeed * dt;
         }
-        b.mesh.rotation.z += dt * 15;
+        // Наклон вперёд при выпаде
+        const swipeProgress = 1 - b.stateTimer / 0.5;
+        b.mesh.rotation.x = Math.sin(swipeProgress * Math.PI) * 0.5;
+        b.mesh.rotation.z = Math.sin(swipeProgress * Math.PI) * 0.2;
 
         // Damage on contact
         if (dist < 4 && player.invuln <= 0 && player.alive) {
@@ -267,6 +271,7 @@ const bossAiSharlotta = {
 
         if (b.stateTimer <= 0) {
           b.mesh.rotation.z = 0;
+          b.mesh.rotation.x = 0;
           b.state = 'recover';
           b.stateTimer = 1;
         }
@@ -933,7 +938,10 @@ const bossAiNozhov = {
           const dashSpeed = 20;
           b.x += b.dashDir.x * dashSpeed * dt;
           b.z += b.dashDir.z * dashSpeed * dt;
-          b.mesh.rotation.z += dt * 20;
+          // Наклон корпуса при рывке — как фехтовальщик
+          const dashProg = 1 - b.stateTimer / 0.3;
+          b.mesh.rotation.x = 0.4 + Math.sin(dashProg * Math.PI) * 0.2;
+          b.mesh.rotation.z = b.dashDir.x > 0 ? 0.15 : -0.15;
 
           // Dash trail
           spawnParticles(new THREE.Vector3(b.x, b.y + 2, b.z), 0x455a64, 2, 3);
@@ -956,6 +964,7 @@ const bossAiNozhov = {
           if (b.stateTimer <= 0) {
             b.dashCount++;
             b.mesh.rotation.z = 0;
+            b.mesh.rotation.x = 0;
             if (b.dashCount >= maxDashes) {
               b.state = 'counter';
               b.stateTimer = b.phase === 2 ? 1.5 : 2.0;

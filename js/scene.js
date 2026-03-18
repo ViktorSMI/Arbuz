@@ -7,16 +7,16 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.4;
 document.body.prepend(renderer.domElement);
 
 export const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.FogExp2(0x87ceeb, 0.008);
+scene.fog = new THREE.FogExp2(0x87ceeb, 0.005);
 
 export const camera = new THREE.PerspectiveCamera(CAM_FOV, window.innerWidth / window.innerHeight, 0.1, 600);
 
-export const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+export const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 scene.add(ambientLight);
 
 export const sunLight = new THREE.DirectionalLight(0xfff4e0, 1.8);
@@ -32,7 +32,7 @@ sunLight.shadow.camera.far = 300;
 sunLight.shadow.bias = -0.001;
 scene.add(sunLight);
 
-export const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x556b2f, 0.4);
+export const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x556b2f, 0.6);
 scene.add(hemiLight);
 
 window.addEventListener('resize', () => {

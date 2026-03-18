@@ -43,7 +43,7 @@ loadSettings();
 
 // Ссылки для biome/daynight систем
 const worldRefs = { terrainMat, grassMat, leafMats, scene, ambientLight, hemiLight, sunLight, waterMat, skyMat };
-const dayNightRefs = { sunLight, ambientLight, hemiLight, scene, sunMesh, baseFogDensity: 0.008 };
+const dayNightRefs = { sunLight, ambientLight, hemiLight, scene, sunMesh, baseFogDensity: 0.005 };
 
 spawnEnemies();
 spawnNpcs();

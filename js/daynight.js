@@ -18,7 +18,7 @@ function updateDayNight(dt, refs) {
   const nightFactor = 1.0 - sunFactor;
 
   if (sunLight) {
-    sunLight.intensity = 0.1 + 1.7 * sunFactor;
+    sunLight.intensity = 0.4 + 1.4 * sunFactor;
 
     _mixedColor.copy(_dayColor).lerp(_nightColor, nightFactor);
     sunLight.color.copy(_mixedColor);
@@ -36,15 +36,15 @@ function updateDayNight(dt, refs) {
   }
 
   if (ambientLight) {
-    ambientLight.intensity = 0.15 + 0.35 * sunFactor;
+    ambientLight.intensity = 0.3 + 0.25 * sunFactor;
   }
 
   if (hemiLight) {
-    hemiLight.intensity = 0.1 + 0.3 * sunFactor;
+    hemiLight.intensity = 0.2 + 0.25 * sunFactor;
   }
 
   if (scene && scene.fog && baseFogDensity !== undefined) {
-    const nightMult = 1.0 + 0.5 * nightFactor;
+    const nightMult = 1.0 + 0.25 * nightFactor;
     scene.fog.density = baseFogDensity * nightMult;
   }
 

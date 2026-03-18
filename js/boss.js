@@ -456,9 +456,10 @@ export function updateBoss(dt) {
       telegraphSlamMesh.position.set(b.x, b.y + 0.5, b.z);
       const jumpProgress = 1 - b.windupTimer / (b.phase === 2 ? 0.6 : 0.8);
       b.mesh.position.y = b.y + jumpProgress * 14;
+      // Приседание при подъёме, вытягивание наверху — без сальто
       b.mesh.scale.set(1 - jumpProgress * 0.15, 1 + jumpProgress * 0.3, 1 - jumpProgress * 0.15);
-      b.saltoAngle = jumpProgress * Math.PI * 2;
-      b.mesh.rotation.x = b.saltoAngle;
+      // Лёгкий наклон назад при взлёте вместо полного вращения
+      b.mesh.rotation.x = -jumpProgress * 0.4;
     } else if (b.nextAttack === 'swipe') {
       telegraphSwipeMat.opacity = 0.25 + Math.sin(b.windupTimer * 15) * 0.15;
       telegraphSwipeMesh.position.set(b.x, b.y + 0.5, b.z);
@@ -532,9 +533,11 @@ export function updateBoss(dt) {
   }
   else if (b.swipeLunging) {
     b.swipeLungeTimer -= dt;
-    b.swipeSpinAngle += dt * 25;
-    b.mesh.rotation.z = b.swipeSpinAngle;
-    b.mesh.position.y = b.y + 3 + Math.max(0, b.vel.y * b.swipeLungeTimer);
+    const lungeProgress = 1 - b.swipeLungeTimer / 0.35;
+    // Наклон вперёд при выпаде + лёгкий поворот корпуса, без бешеного вращения
+    b.mesh.rotation.x = Math.sin(lungeProgress * Math.PI) * 0.4;
+    b.mesh.rotation.z = Math.sin(lungeProgress * Math.PI) * 0.25;
+    b.mesh.position.y = b.y + 1.5 + Math.max(0, b.vel.y * b.swipeLungeTimer);
     spawnParticles(new THREE.Vector3(b.x, b.y + 2, b.z), 0xffab00, 2, 3);
     if (dist < 5 && player.invuln <= 0) {
       sfxHit();
@@ -553,6 +556,7 @@ export function updateBoss(dt) {
     if (b.swipeLungeTimer <= 0) {
       b.swipeLunging = false;
       b.mesh.rotation.z = 0;
+      b.mesh.rotation.x = 0;
       b.atkCd = 1.0;
       b.state = 'idle';
       b.stateTimer = 0.8;
@@ -562,8 +566,9 @@ export function updateBoss(dt) {
     b.chargeTimer -= dt;
     b.x += b.chargeDir.x * 25 * dt;
     b.z += b.chargeDir.z * 25 * dt;
-    b.spinAngle += dt * 18;
-    b.mesh.rotation.x = b.spinAngle;
+    // Наклон вперёд при чардже + тряска корпуса, БЕЗ полного вращения
+    b.mesh.rotation.x = 0.5 + Math.sin(b.chargeTimer * 30) * 0.15;
+    b.mesh.rotation.z = Math.sin(b.chargeTimer * 25) * 0.1;
     spawnParticles(new THREE.Vector3(b.x, b.y + 1, b.z), 0x8d6e63, 3, 4);
     spawnParticles(new THREE.Vector3(b.x, b.y + 2, b.z), 0xff1744, 1, 3);
     if (dist < 4) {
@@ -581,7 +586,7 @@ export function updateBoss(dt) {
         }
       }
     }
-    if (b.chargeTimer <= 0) { b.charging = false; b.atkCd = 1.5; b.state = 'idle'; b.stateTimer = 1; b.mesh.rotation.x = 0; b.spinAngle = 0; }
+    if (b.chargeTimer <= 0) { b.charging = false; b.atkCd = 1.5; b.state = 'idle'; b.stateTimer = 1; b.mesh.rotation.x = 0; b.mesh.rotation.z = 0; }
   }
   else {
     b.stateTimer -= dt;
@@ -630,8 +635,8 @@ export function updateBoss(dt) {
     }
   }
   if (b.charging) {
-    // Поднимаем пивот до центра тела чтобы спин не проваливал босса сквозь пол
-    b.mesh.position.y += 3;
+    // Лёгкий подъём при чардже для эффекта массы
+    b.mesh.position.y += 0.5;
   } else if (b.windupTimer > 0) {
     /* windup shake handled above */
   } else if (!b.swipeLunging && !b.slamLanding) {
