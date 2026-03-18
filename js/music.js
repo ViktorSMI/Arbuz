@@ -461,3 +461,76 @@ export function sfxQuestComplete() {
   setTimeout(() => sfxNote(784, 0.12, 'sine', 0.25), 160);
   setTimeout(() => sfxNote(1047, 0.25, 'sine', 0.3), 240);
 }
+
+export function sfxBlock() {
+  initSfxCtx();
+  sfxNote(200, 0.08, 'square', 0.2);
+  sfxNoise(0.05, 0.15);
+}
+
+export function sfxParry() {
+  initSfxCtx();
+  sfxNote(800, 0.15, 'sine', 0.35);
+  sfxNote(1200, 0.1, 'sine', 0.25);
+  sfxNoise(0.08, 0.2);
+}
+
+export function sfxDashAttack() {
+  initSfxCtx();
+  sfxNoise(0.1, 0.25);
+  sfxNote(300, 0.15, 'sawtooth', 0.2);
+  sfxNote(500, 0.1, 'sine', 0.15);
+}
+
+export function sfxAoeSlam() {
+  initSfxCtx();
+  sfxNote(60, 0.4, 'sawtooth', 0.35);
+  sfxNote(40, 0.5, 'square', 0.25);
+  sfxNoise(0.2, 0.3);
+}
+
+export function sfxSeedThrow() {
+  initSfxCtx();
+  sfxNote(500, 0.08, 'sine', 0.15);
+  sfxNote(700, 0.06, 'sine', 0.12);
+}
+
+export function sfxEquip() {
+  initSfxCtx();
+  sfxNote(400, 0.1, 'triangle', 0.2);
+  sfxNote(600, 0.08, 'sine', 0.15);
+}
+
+export function sfxLootDrop() {
+  initSfxCtx();
+  sfxNote(800, 0.15, 'sine', 0.2);
+  setTimeout(() => sfxNote(1000, 0.15, 'sine', 0.25), 80);
+  setTimeout(() => sfxNote(1200, 0.2, 'sine', 0.2), 160);
+}
+
+export function sfxBossDeathCinematic() {
+  initSfxCtx();
+  sfxNote(100, 0.5, 'sawtooth', 0.4);
+  sfxNote(80, 0.6, 'square', 0.3);
+  sfxNoise(0.3, 0.35);
+  setTimeout(() => {
+    sfxNote(200, 0.3, 'sawtooth', 0.3);
+    sfxNote(300, 0.3, 'triangle', 0.25);
+  }, 500);
+  setTimeout(() => {
+    sfxNote(400, 0.3, 'sine', 0.3);
+    sfxNote(600, 0.3, 'sine', 0.25);
+    sfxNote(800, 0.4, 'sine', 0.3);
+  }, 1000);
+  setTimeout(() => {
+    sfxNote(523, 0.2, 'sine', 0.3);
+    sfxNote(659, 0.2, 'sine', 0.3);
+    sfxNote(784, 0.2, 'sine', 0.3);
+    sfxNote(1047, 0.4, 'sine', 0.35);
+  }, 1500);
+}
+
+export function setSfxVolume(v) {
+  initSfxCtx();
+  if (sfxGainNode) sfxGainNode.gain.value = Math.max(0, Math.min(1, v));
+}

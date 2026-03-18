@@ -1,4 +1,4 @@
-export const mouse = { dx: 0, dy: 0, down: false };
+export const mouse = { dx: 0, dy: 0, down: false, rightDown: false };
 export const pointer = { locked: false };
 export const keys = {};
 export const keysJustPressed = {};
@@ -21,8 +21,13 @@ document.addEventListener('mousemove', e => {
 document.addEventListener('mousedown', e => {
   if (e.button === 0) mouse.down = true;
   if (e.button === 1 && pointer.locked) { e.preventDefault(); lockOn.toggled = true; }
+  if (e.button === 2) mouse.rightDown = true;
 });
-document.addEventListener('mouseup', e => { if (e.button === 0) mouse.down = false; });
+document.addEventListener('mouseup', e => {
+  if (e.button === 0) mouse.down = false;
+  if (e.button === 2) mouse.rightDown = false;
+});
+document.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('pointerlockchange', () => {
   pointer.locked = !!document.pointerLockElement;
 });

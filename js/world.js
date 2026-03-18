@@ -6,7 +6,7 @@ import { getTerrainHeight } from './terrain.js';
 export const obstacles = [];
 
 const grassGeo = new THREE.PlaneGeometry(0.3, 0.8);
-const grassMat = new THREE.MeshStandardMaterial({ color: 0x5d8a3c, side: THREE.DoubleSide, alphaTest: 0.5 });
+export const grassMat = new THREE.MeshStandardMaterial({ color: 0x5d8a3c, side: THREE.DoubleSide, alphaTest: 0.5 });
 const grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, 3000);
 const dummy = new THREE.Object3D();
 for (let i = 0; i < 3000; i++) {
@@ -29,7 +29,7 @@ const trunkMats = [
   new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.9 }),
   new THREE.MeshStandardMaterial({ color: 0x4e342e, roughness: 0.9 }),
 ];
-const leafMats = [
+export const leafMats = [
   new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.8 }),
   new THREE.MeshStandardMaterial({ color: 0x388e3c, roughness: 0.8 }),
   new THREE.MeshStandardMaterial({ color: 0x1b5e20, roughness: 0.8 }),
@@ -102,22 +102,26 @@ for (let i = 0; i < CRATE_COUNT; i++) {
 }
 
 const skyGeo = new THREE.SphereGeometry(250, 32, 32);
-const skyMat = new THREE.ShaderMaterial({
+export const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide,
-  uniforms: {},
+  uniforms: {
+    uTop: { value: new THREE.Vector3(0.45, 0.72, 0.95) },
+    uBot: { value: new THREE.Vector3(0.85, 0.92, 0.98) },
+    uHor: { value: new THREE.Vector3(0.95, 0.88, 0.7) },
+  },
   vertexShader: 'varying vec3 vPos;void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-  fragmentShader: 'varying vec3 vPos;void main(){float h=normalize(vPos).y;vec3 top=vec3(.45,.72,.95);vec3 bot=vec3(.85,.92,.98);vec3 hor=vec3(.95,.88,.7);vec3 c=mix(hor,top,smoothstep(0.,.5,h));c=mix(c,bot,smoothstep(0.,-.2,h));gl_FragColor=vec4(c,1.);}'
+  fragmentShader: 'uniform vec3 uTop;uniform vec3 uBot;uniform vec3 uHor;varying vec3 vPos;void main(){float h=normalize(vPos).y;vec3 c=mix(uHor,uTop,smoothstep(0.,.5,h));c=mix(c,uBot,smoothstep(0.,-.2,h));gl_FragColor=vec4(c,1.);}'
 });
 scene.add(new THREE.Mesh(skyGeo, skyMat));
 
 const sunGeo = new THREE.SphereGeometry(5, 16, 16);
 const sunDiscMat = new THREE.MeshBasicMaterial({ color: 0xfff4c0 });
-const sunMesh = new THREE.Mesh(sunGeo, sunDiscMat);
+export const sunMesh = new THREE.Mesh(sunGeo, sunDiscMat);
 sunMesh.position.copy(sunLight.position).normalize().multiplyScalar(240);
 scene.add(sunMesh);
 
 const waterGeo = new THREE.PlaneGeometry(WORLD_SIZE * 2, WORLD_SIZE * 2);
-const waterMat = new THREE.MeshStandardMaterial({ color: 0x1565c0, transparent: true, opacity: 0.6, roughness: 0.1, metalness: 0.3 });
+export const waterMat = new THREE.MeshStandardMaterial({ color: 0x1565c0, transparent: true, opacity: 0.6, roughness: 0.1, metalness: 0.3 });
 const water = new THREE.Mesh(waterGeo, waterMat);
 water.rotation.x = -Math.PI / 2;
 water.position.y = -3;

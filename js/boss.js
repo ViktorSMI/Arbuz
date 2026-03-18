@@ -5,6 +5,8 @@ import { getTerrainHeight } from './terrain.js';
 import { player } from './player.js';
 import { spawnParticles } from './particles.js';
 import { sfxBossSlam, sfxBossCharge, sfxBossSwipe, sfxBossHit, sfxHit, sfxBossDefeat } from './music.js';
+import { BOSS_AIS } from './boss-ai.js';
+import { startBossDeathSequence, isCinematicActive } from './boss-death.js';
 
 export const bossState = {
   bossObj: null,
@@ -314,6 +316,9 @@ export function spawnBoss() {
     swipeSpinAngle: 0, swipeLunging: false, swipeLungeTimer: 0,
   };
   bossState.bossActive = true;
+  // Инициализируем уникальный AI
+  const ai = BOSS_AIS[Math.min(bossState.currentBossIndex, BOSS_AIS.length - 1)];
+  if (ai && ai.init) ai.init(bossState.bossObj);
 }
 
 const telegraphChargeMat = new THREE.MeshBasicMaterial({ color: 0xff1744, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, depthTest: false });
@@ -352,6 +357,46 @@ export function updateBoss(dt) {
   const dx = player.pos.x - b.x, dz = player.pos.z - b.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
   b.facing = Math.atan2(dx, dz);
+
+  // Используем уникальный AI если доступен
+  const ai = BOSS_AIS[Math.min(bossState.currentBossIndex, BOSS_AIS.length - 1)];
+  if (ai && ai.update) {
+    // Проверка выхода из арены
+    const playerInArena = Math.sqrt((player.pos.x - BOSS_ARENA_POS.x) ** 2 + (player.pos.z - BOSS_ARENA_POS.z) ** 2) < BOSS_ARENA_R + 3;
+    if (!playerInArena) {
+      const toCenterX = BOSS_ARENA_POS.x - b.x, toCenterZ = BOSS_ARENA_POS.z - b.z;
+      const toCenterD = Math.sqrt(toCenterX * toCenterX + toCenterZ * toCenterZ);
+      if (toCenterD > 2) {
+        b.x += (toCenterX / toCenterD) * 4 * dt;
+        b.z += (toCenterZ / toCenterD) * 4 * dt;
+      }
+      b.hp = Math.min(b.maxHp, b.hp + 50 * dt);
+      b.y = getTerrainHeight(b.x, b.z);
+      b.mesh.position.set(b.x, b.y, b.z);
+      b.mesh.rotation.y = b.facing;
+      return;
+    }
+    // Фазовая проверка
+    if (b.hp <= b.maxHp * 0.5 && b.phase === 1) {
+      b.phase = 2;
+      spawnParticles(new THREE.Vector3(b.x, b.y + 3, b.z), 0xff1744, 20, 8);
+    }
+    // Вызываем уникальный AI
+    ai.update(dt, b, dist, dx, dz);
+    // Обновляем позицию меша
+    b.y = getTerrainHeight(b.x, b.z);
+    b.mesh.position.set(b.x, b.y, b.z);
+    b.mesh.rotation.y = b.facing;
+    // Визуальные эффекты урона
+    if (b.flashTimer > 0) {
+      b.mesh.userData.body.material.emissive.set(0xff0000);
+      b.mesh.userData.body.material.emissiveIntensity = b.flashTimer * 5;
+    } else {
+      b.mesh.userData.body.material.emissiveIntensity = b.phase === 2 ? 0.2 : 0;
+      if (b.phase === 2) b.mesh.userData.body.material.emissive.set(0xff1744);
+    }
+    return;
+  }
 
   const playerInArena = Math.sqrt((player.pos.x - BOSS_ARENA_POS.x) ** 2 + (player.pos.z - BOSS_ARENA_POS.z) ** 2) < BOSS_ARENA_R + 3;
   if (!playerInArena) {
@@ -489,7 +534,7 @@ export function updateBoss(dt) {
     b.swipeLungeTimer -= dt;
     b.swipeSpinAngle += dt * 25;
     b.mesh.rotation.z = b.swipeSpinAngle;
-    b.mesh.position.y = b.y + Math.max(0, b.vel.y * b.swipeLungeTimer);
+    b.mesh.position.y = b.y + 3 + Math.max(0, b.vel.y * b.swipeLungeTimer);
     spawnParticles(new THREE.Vector3(b.x, b.y + 2, b.z), 0xffab00, 2, 3);
     if (dist < 5 && player.invuln <= 0) {
       sfxHit();
@@ -585,7 +630,8 @@ export function updateBoss(dt) {
     }
   }
   if (b.charging) {
-    /* spin handled in charge block */
+    // Поднимаем пивот до центра тела чтобы спин не проваливал босса сквозь пол
+    b.mesh.position.y += 3;
   } else if (b.windupTimer > 0) {
     /* windup shake handled above */
   } else if (!b.swipeLunging && !b.slamLanding) {
@@ -610,6 +656,12 @@ export function hitBoss(dmg) {
   atkPos.y += 1;
   const d = atkPos.distanceTo(new THREE.Vector3(b.x, b.y + 3, b.z));
   if (d < ATTACK_RANGE + 3) {
+    // Проверяем AI onHit (например counter stance у Ножова)
+    const ai = BOSS_AIS[Math.min(bossState.currentBossIndex, BOSS_AIS.length - 1)];
+    if (ai && ai.onHit) {
+      const blocked = ai.onHit(b, dmg);
+      if (blocked) return; // AI заблокировал удар
+    }
     b.hp -= dmg;
     b.flashTimer = 0.15;
     b.stunTimer = 0.2;
@@ -618,14 +670,18 @@ export function hitBoss(dmg) {
     b.vel.copy(kd.multiplyScalar(3));
     spawnParticles(new THREE.Vector3(b.x, b.y + 3, b.z), 0xff1744, 8, 5);
     if (b.hp <= 0) {
-      b.alive = false;
-      b.mesh.visible = false;
-      bossState.bossActive = false;
-      bossState.bossDefeated = true;
       player.xp += b.xpReward;
       player.kills++;
-      spawnParticles(new THREE.Vector3(b.x, b.y + 3, b.z), 0xfdd835, 30, 10);
-      sfxBossDefeat();
+      // Запуск кинематографической смерти босса
+      startBossDeathSequence(b, () => {
+        b.alive = false;
+        b.mesh.visible = false;
+        bossState.bossActive = false;
+        bossState.bossDefeated = true;
+        // Cleanup AI
+        const ai = BOSS_AIS[Math.min(bossState.currentBossIndex, BOSS_AIS.length - 1)];
+        if (ai && ai.cleanup) ai.cleanup(b);
+      });
     }
   }
 }

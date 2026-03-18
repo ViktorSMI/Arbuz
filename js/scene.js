@@ -16,7 +16,7 @@ scene.fog = new THREE.FogExp2(0x87ceeb, 0.008);
 
 export const camera = new THREE.PerspectiveCamera(CAM_FOV, window.innerWidth / window.innerHeight, 0.1, 600);
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+export const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
 
 export const sunLight = new THREE.DirectionalLight(0xfff4e0, 1.8);
@@ -32,7 +32,7 @@ sunLight.shadow.camera.far = 300;
 sunLight.shadow.bias = -0.001;
 scene.add(sunLight);
 
-const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x556b2f, 0.4);
+export const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x556b2f, 0.4);
 scene.add(hemiLight);
 
 window.addEventListener('resize', () => {

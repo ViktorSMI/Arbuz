@@ -34,7 +34,7 @@ for (let idx = 0; idx < posAttr.count; idx++) {
 }
 terrainGeo.computeVertexNormals();
 
-const terrainMat = new THREE.MeshStandardMaterial({
+export const terrainMat = new THREE.MeshStandardMaterial({
   color: 0x4a7c3f,
   roughness: 0.9,
   metalness: 0.0,

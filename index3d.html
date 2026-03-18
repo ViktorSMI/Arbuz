@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Арбузилла 3D — Dark Souls of Watermelons</title>
+<title>Arbuz Souls — Dark Souls of Watermelons</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;overflow:hidden;font-family:'Segoe UI',Arial,sans-serif;cursor:none}
@@ -72,10 +72,11 @@ canvas{display:block}
 </head>
 <body>
 <div id="blocker">
-  <h1>🍉 АРБУЗИЛЛА 3D</h1>
+  <h1>🍉 ARBUZ SOULS</h1>
   <h2>Dark Souls of Watermelons</h2>
   <button id="btn-play">Начать Завоевание</button>
-  <div class="sub">Клик — захват курсора. WASD — движение. Мышь — камера. Shift — уворот. ЛКМ — удар. ESC — пауза.</div>
+  <button id="btn-continue" style="display:none;margin-top:10px;padding:16px 50px;font-size:1.2rem;font-weight:bold;border:none;border-radius:10px;cursor:pointer;color:#fff;letter-spacing:1px;background:linear-gradient(135deg,#ff8f00,#e65100);transition:transform .15s">Продолжить</button>
+  <div class="sub">WASD — движение. Мышь — камера. Shift — уворот. ЛКМ — удар. ПКМ — блок. Q/F/C — скиллы. Tab — инвентарь. ESC — настройки.</div>
 </div>
 <div id="hud">
   <div id="hp-bar" class="bar-wrap"><div class="bar-fill" style="width:100%"></div><div class="bar-label">HP</div></div>
@@ -115,6 +116,48 @@ canvas{display:block}
 </div>
 <style>@keyframes reward-glow{0%,100%{box-shadow:0 0 8px #4caf5044}50%{box-shadow:0 0 20px #4caf5088}}</style>
 <div id="lock-reticle"></div>
+
+<div id="screen-flash" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;opacity:0;pointer-events:none;z-index:200;transition:opacity 0.3s"></div>
+<div id="boss-defeated-text" style="position:fixed;top:35%;left:50%;transform:translate(-50%,-50%);font-size:4rem;color:#fdd835;text-shadow:0 0 40px #fdd83566,0 0 80px #ff8f0044;z-index:201;display:none;font-weight:bold;letter-spacing:4px;text-align:center">БОСС ПОВЕРЖЕН</div>
+<div id="biome-name" style="position:fixed;top:20%;left:50%;transform:translate(-50%,-50%);font-size:2.5rem;color:#fff;text-shadow:0 0 30px #00000088;z-index:201;display:none;font-weight:bold;letter-spacing:3px;opacity:0;transition:opacity 1s"></div>
+
+<div id="skill-bar" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:10;pointer-events:none">
+  <div class="skill-slot" data-skill="0" style="width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #666;display:flex;align-items:center;justify-content:center;position:relative;font-size:22px"><span class="skill-icon">Q</span><div class="skill-cd-overlay" style="position:absolute;bottom:0;left:0;width:100%;background:rgba(0,0,0,.7);border-radius:0 0 6px 6px;height:0%;transition:height 0.1s"></div><div class="skill-key" style="position:absolute;bottom:-14px;font-size:9px;color:#aaa">Q</div></div>
+  <div class="skill-slot" data-skill="1" style="width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #666;display:flex;align-items:center;justify-content:center;position:relative;font-size:22px"><span class="skill-icon">F</span><div class="skill-cd-overlay" style="position:absolute;bottom:0;left:0;width:100%;background:rgba(0,0,0,.7);border-radius:0 0 6px 6px;height:0%"></div><div class="skill-key" style="position:absolute;bottom:-14px;font-size:9px;color:#aaa">F</div></div>
+  <div class="skill-slot" data-skill="2" style="width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #666;display:flex;align-items:center;justify-content:center;position:relative;font-size:22px"><span class="skill-icon">C</span><div class="skill-cd-overlay" style="position:absolute;bottom:0;left:0;width:100%;background:rgba(0,0,0,.7);border-radius:0 0 6px 6px;height:0%"></div><div class="skill-key" style="position:absolute;bottom:-14px;font-size:9px;color:#aaa">C</div></div>
+</div>
+
+<div id="equip-display" style="position:fixed;bottom:16px;left:16px;z-index:10;pointer-events:none;color:#fff;font-size:12px;text-shadow:0 1px 3px #000"></div>
+<div id="block-indicator" style="position:fixed;top:50%;left:50%;margin:-35px 0 0 25px;z-index:11;pointer-events:none;display:none;font-size:28px">🛡️</div>
+<div id="parry-flash" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:120px;height:120px;border-radius:50%;border:3px solid #fdd835;box-shadow:0 0 30px #fdd835;z-index:11;pointer-events:none;display:none;opacity:0"></div>
+<div id="time-indicator" style="position:fixed;top:10px;right:190px;z-index:10;pointer-events:none;font-size:18px"></div>
+
+<div id="settings-panel" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;z-index:150;flex-direction:column">
+  <h2 style="color:#4caf50;font-size:2rem;margin-bottom:30px">Настройки</h2>
+  <div style="display:flex;flex-direction:column;gap:16px;width:300px">
+    <label style="color:#fff;display:flex;justify-content:space-between;align-items:center">Громкость музыки <input type="range" id="set-volume" min="0" max="100" value="18" style="width:150px"></label>
+    <label style="color:#fff;display:flex;justify-content:space-between;align-items:center">Громкость SFX <input type="range" id="set-sfx" min="0" max="100" value="25" style="width:150px"></label>
+    <label style="color:#fff;display:flex;justify-content:space-between;align-items:center">Чувствительность <input type="range" id="set-sens" min="1" max="10" value="2" style="width:150px"></label>
+    <label style="color:#fff;display:flex;justify-content:space-between;align-items:center">Bloom <input type="checkbox" id="set-bloom" checked></label>
+  </div>
+  <button id="btn-settings-close" style="margin-top:30px;padding:12px 40px;font-size:1rem;border:none;border-radius:10px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#4caf50,#2e7d32)">Закрыть</button>
+</div>
+
+<div id="inventory-panel" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;z-index:150;flex-direction:column">
+  <h2 style="color:#fdd835;font-size:2rem;margin-bottom:20px">Инвентарь</h2>
+  <div style="display:flex;gap:30px">
+    <div id="inv-equipped" style="color:#fff;min-width:200px">
+      <h3 style="color:#4caf50;margin-bottom:10px">Экипировано</h3>
+      <div id="inv-sword" style="padding:8px;border:1px solid #4caf50;border-radius:8px;margin-bottom:8px;cursor:pointer">Меч: Обычный</div>
+      <div id="inv-armor" style="padding:8px;border:1px solid #4caf50;border-radius:8px;cursor:pointer">Броня: Нет</div>
+    </div>
+    <div id="inv-bag" style="color:#fff;min-width:200px">
+      <h3 style="color:#ff8f00;margin-bottom:10px">Рюкзак</h3>
+      <div id="inv-items" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto"></div>
+    </div>
+  </div>
+  <button id="btn-inv-close" style="margin-top:20px;padding:12px 40px;font-size:1rem;border:none;border-radius:10px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#ff8f00,#e65100)">Закрыть [Tab]</button>
+</div>
 
 <div id="mobile-controls">
   <div id="touch-joystick"><div id="touch-stick"></div></div>

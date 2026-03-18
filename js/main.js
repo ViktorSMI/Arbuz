@@ -6,7 +6,7 @@ import {
   ATTACK_RANGE, ATTACK_DMG, ATTACK_CD, COMBO_WINDOW,
   CAM_SENSITIVITY, BOSS_ARENA_POS, BOSS_ARENA_R, WATER_LEVEL,
 } from './constants.js';
-import { scene, renderer, camera } from './scene.js';
+import { scene, renderer, camera, sunLight } from './scene.js';
 import { getTerrainHeight } from './terrain.js';
 import { obstacles } from './world.js';
 import { player, playerMesh, camState } from './player.js';
@@ -19,11 +19,38 @@ import { portalState, spawnPortal, updatePortal, removePortal } from './portal.j
 import { spawnSeed, updateSeeds, clearSeeds } from './seeds.js';
 import { startMusic, switchToBossMusic, switchToExploreMusic, sfxJump, sfxLand, sfxAttack, sfxDodge, sfxHit, sfxDeath, sfxEnemyHit, sfxNpcBabble, sfxLevelUp, sfxPickup, sfxSplash, sfxPortalEnter, sfxQuestComplete } from './music.js';
 import { npcs, spawnNpcs, clearNpcs, updateNpcs, getNearestNpc, interactNpc, hitNpc } from './npc.js';
+import { updateBlock, processIncomingDamage, isBlocking } from './combat.js';
+import { updateSkills, getSkillStates, clearSkillEntities } from './skills.js';
+import { updateLootDrops, clearLootDrops, rollLootDrop, getDmgMultiplier, getDefMultiplier, getEquippedSword } from './equipment.js';
+import { applyBiome, getBiome } from './biomes.js';
+import { updateDayNight, isNight, getTimeOfDay } from './daynight.js';
+import { initPostProcessing, getComposer, resizePostProcessing, setBloomIntensity } from './postprocessing.js';
+import { updateProjectiles, clearProjectiles } from './projectiles.js';
+import { updateHazards, clearHazards } from './hazards.js';
+import { saveGame, loadGame, hasSave } from './save.js';
+import { loadSettings, getSetting, setSetting, saveSettings } from './settings.js';
+import { setMusicVolume, setSfxVolume, sfxBlock, sfxParry, sfxEquip } from './music.js';
+import { ambientLight, hemiLight } from './scene.js';
+import { terrainMat } from './terrain.js';
+import { grassMat, leafMats, skyMat, sunMesh, waterMat } from './world.js';
+
+// Инициализация post-processing
+const composer = initPostProcessing(renderer, scene, camera);
+window.addEventListener('resize', () => resizePostProcessing(window.innerWidth, window.innerHeight));
+
+// Загрузка настроек
+loadSettings();
+
+// Ссылки для biome/daynight систем
+const worldRefs = { terrainMat, grassMat, leafMats, scene, ambientLight, hemiLight, sunLight, waterMat, skyMat };
+const dayNightRefs = { sunLight, ambientLight, hemiLight, scene, sunMesh, baseFogDensity: 0.008 };
 
 spawnEnemies();
 spawnNpcs();
 
 let gameStarted = false;
+let settingsOpen = false;
+let inventoryOpen = false;
 let gameLocation = 1;
 let lastTarget = null;
 let targetShowTimer = 0;
@@ -53,12 +80,74 @@ const upgradePanel = document.getElementById('upgrade-panel');
 const portalPrompt = document.getElementById('portal-prompt');
 const lockInfo = document.getElementById('lock-info');
 
+// Показать кнопку "Продолжить" если есть сохранение
+const btnContinue = document.getElementById('btn-continue');
+if (hasSave() && btnContinue) btnContinue.style.display = 'block';
+
 document.getElementById('btn-play').addEventListener('click', () => {
   if (!touch.active) renderer.domElement.requestPointerLock();
   blocker.style.display = 'none';
   gameStarted = true;
   player.pos.set(0, getTerrainHeight(0, 0), 0);
+  applyBiome(0, worldRefs);
   startMusic(0);
+});
+
+if (btnContinue) btnContinue.addEventListener('click', () => {
+  const save = loadGame();
+  if (!save) return;
+  blocker.style.display = 'none';
+  gameStarted = true;
+  // Применяем сохранение
+  Object.assign(player, {
+    hp: save.player.hp, maxHp: save.player.maxHp,
+    stamina: save.player.stamina, maxStamina: save.player.maxStamina,
+    speed: save.player.speed, xp: save.player.xp, level: save.player.level,
+    xpToNext: save.player.xpToNext, kills: save.player.kills, seeds: save.player.seeds,
+    alive: true,
+  });
+  if (save.player.upgrades) Object.assign(player.upgrades, save.player.upgrades);
+  if (save.player.equipment) Object.assign(player.equipment, save.player.equipment);
+  if (save.player.inventory) player.inventory = save.player.inventory;
+  player.pos.set(save.position.x, save.position.y, save.position.z);
+  gameLocation = save.gameLocation || 1;
+  bossState.currentBossIndex = save.bossIndex || 0;
+  applyBiome(gameLocation - 1, worldRefs);
+  startMusic(gameLocation - 1);
+  if (!touch.active) renderer.domElement.requestPointerLock();
+});
+
+// Настройки
+const settingsPanel = document.getElementById('settings-panel');
+const invPanel = document.getElementById('inventory-panel');
+
+document.getElementById('btn-settings-close')?.addEventListener('click', () => {
+  settingsPanel.style.display = 'none';
+  settingsOpen = false;
+  if (!touch.active) renderer.domElement.requestPointerLock();
+});
+
+document.getElementById('btn-inv-close')?.addEventListener('click', () => {
+  invPanel.style.display = 'none';
+  inventoryOpen = false;
+  if (!touch.active) renderer.domElement.requestPointerLock();
+});
+
+document.getElementById('set-volume')?.addEventListener('input', e => {
+  const v = e.target.value / 100;
+  setMusicVolume(v);
+  setSetting('masterVolume', v);
+  saveSettings();
+});
+document.getElementById('set-sfx')?.addEventListener('input', e => {
+  const v = e.target.value / 100;
+  setSfxVolume(v);
+  setSetting('sfxVolume', v);
+  saveSettings();
+});
+document.getElementById('set-sens')?.addEventListener('input', e => {
+  setSetting('sensitivity', e.target.value / 1000);
+  saveSettings();
 });
 
 document.getElementById('btn-respawn').addEventListener('click', () => {
@@ -108,8 +197,52 @@ document.querySelectorAll('.upgr-btn').forEach(btn => {
 const clock = new THREE.Clock();
 
 function update() {
-  const dt = Math.min(clock.getDelta(), 0.05);
-  if (!gameStarted || !player.alive) {
+  let dt = Math.min(clock.getDelta(), 0.05);
+
+  // ESC для настроек, Tab для инвентаря
+  if (keysJustPressed['Escape'] && gameStarted && player.alive) {
+    if (settingsOpen) {
+      settingsPanel.style.display = 'none';
+      settingsOpen = false;
+      if (!touch.active) renderer.domElement.requestPointerLock();
+    } else if (inventoryOpen) {
+      invPanel.style.display = 'none';
+      inventoryOpen = false;
+      if (!touch.active) renderer.domElement.requestPointerLock();
+    } else {
+      settingsPanel.style.display = 'flex';
+      settingsOpen = true;
+      document.exitPointerLock();
+    }
+  }
+  if (keysJustPressed['Tab'] && gameStarted && player.alive && !settingsOpen) {
+    if (inventoryOpen) {
+      invPanel.style.display = 'none';
+      inventoryOpen = false;
+      if (!touch.active) renderer.domElement.requestPointerLock();
+    } else {
+      invPanel.style.display = 'flex';
+      inventoryOpen = true;
+      // Обновляем инвентарь
+      const sword = getEquippedSword();
+      document.getElementById('inv-sword').textContent = 'Меч: ' + (sword ? sword.name : 'Обычный');
+      document.getElementById('inv-armor').textContent = 'Броня: ' + (player.equipment.armor === 'none' ? 'Нет' : player.equipment.armor);
+      const itemsEl = document.getElementById('inv-items');
+      itemsEl.innerHTML = player.inventory.length === 0 ? '<div style="color:#666">Пусто</div>' :
+        player.inventory.map((item, i) => `<div style="padding:4px 8px;border:1px solid #555;border-radius:4px;cursor:pointer" data-inv="${i}">${item.name}</div>`).join('');
+      document.exitPointerLock();
+    }
+  }
+
+  // День/ночь (работает всегда)
+  updateDayNight(dt, dayNightRefs);
+  const timeIndicator = document.getElementById('time-indicator');
+  if (timeIndicator) {
+    const t = getTimeOfDay();
+    timeIndicator.textContent = t < 0.25 ? '🌅' : t < 0.5 ? '☀️' : t < 0.75 ? '🌆' : '🌙';
+  }
+
+  if (!gameStarted || !player.alive || settingsOpen || inventoryOpen) {
     if (!player.alive && !player._deathMusicStopped) {
       player._deathMusicStopped = true;
       switchToExploreMusic();
@@ -298,11 +431,16 @@ function update() {
     player.stamina = Math.min(player.maxStamina, player.stamina + STAMINA_REGEN * dt);
   }
 
+  // Блок/парирование
+  updateBlock(dt, mouse.rightDown);
+  const blockIndicator = document.getElementById('block-indicator');
+  if (blockIndicator) blockIndicator.style.display = isBlocking() ? 'block' : 'none';
+
   player.attackCd = Math.max(0, player.attackCd - dt);
   player.comboTimer = Math.max(0, player.comboTimer - dt);
   if (player.comboTimer <= 0) player.comboCount = 0;
 
-  if (mouse.down && !player.attacking && player.attackCd <= 0 && player.stamina >= ATTACK_COST && !player.dodging) {
+  if (mouse.down && !player.attacking && player.attackCd <= 0 && player.stamina >= ATTACK_COST && !player.dodging && !player.blocking) {
     player.attacking = true;
     player.attackTimer = 0.25;
     player.attackCd = ATTACK_CD;
@@ -314,7 +452,7 @@ function update() {
 
     const atkPos = player.pos.clone().add(forward.clone().multiplyScalar(2));
     atkPos.y += 1;
-    const dmg = ATTACK_DMG * (1 + (player.comboCount - 1) * 0.15) * (1 + player.upgrades.damage * 0.25);
+    const dmg = ATTACK_DMG * (1 + (player.comboCount - 1) * 0.15) * (1 + player.upgrades.damage * 0.25) * getDmgMultiplier();
     for (const e of enemies) {
       if (!e.alive) continue;
       const ex = e.x, ez = e.z, ey = e.y + e.type.r;
@@ -338,6 +476,7 @@ function update() {
           player.kills++;
           const seedCount = 1 + Math.floor(Math.random() * 3);
           for (let si = 0; si < seedCount; si++) spawnSeed(ex, e.y, ez);
+          rollLootDrop(ex, e.y, ez);
         }
       }
     }
@@ -456,9 +595,25 @@ function update() {
         setupArena();
         spawnEnemies();
         spawnNpcs();
+        clearProjectiles();
+        clearHazards();
+        clearLootDrops();
+        clearSkillEntities();
         bossState.bossDefeated = false;
         portalPrompt.style.display = 'none';
+        applyBiome(gameLocation - 1, worldRefs);
+        dayNightRefs.baseFogDensity = getBiome(gameLocation - 1).fogDensity;
         startMusic(gameLocation - 1);
+        saveGame(player, gameLocation, bossState.currentBossIndex);
+        // Показ названия биома
+        const biomeName = document.getElementById('biome-name');
+        if (biomeName) {
+          biomeName.textContent = getBiome(gameLocation - 1).name;
+          biomeName.style.display = 'block';
+          biomeName.style.opacity = '1';
+          setTimeout(() => { biomeName.style.opacity = '0'; }, 2000);
+          setTimeout(() => { biomeName.style.display = 'none'; }, 3000);
+        }
       }
     } else {
       portalPrompt.style.display = 'none';
@@ -472,12 +627,19 @@ function update() {
     upgradePanel.style.display = 'flex';
     document.exitPointerLock();
     sfxLevelUp();
+    saveGame(player, gameLocation, bossState.currentBossIndex);
   }
+
+  // Скиллы
+  updateSkills(dt, keysJustPressed);
 
   updateEnemyAI(dt);
   updateNpcs(dt);
   updateParticles(dt);
   updateSeeds(dt);
+  updateProjectiles(dt);
+  updateHazards(dt);
+  updateLootDrops(dt);
 
   targetShowTimer = Math.max(0, targetShowTimer - dt);
 
@@ -486,6 +648,8 @@ function update() {
   if (player.dodging) {
     player.dodgeRollAngle += dt * 18;
     const dodgeYaw = Math.atan2(player.dodgeDir.x, player.dodgeDir.z);
+    // Поднимаем пивот до центра тела (y=1.2) чтобы кувырок не проваливался сквозь пол
+    playerMesh.position.y += 1.2;
     playerMesh.rotation.set(0, dodgeYaw, 0);
     playerMesh.rotateOnAxis(new THREE.Vector3(1, 0, 0), player.dodgeRollAngle);
     playerMesh.userData.armL.rotation.set(1.8, 0, 0.3);
@@ -650,7 +814,28 @@ function update() {
   updateHud(lastTarget, targetShowTimer, gameLocation);
   drawMinimap();
 
-  renderer.render(scene, camera);
+  // Обновление HUD скиллов
+  const skillStates = getSkillStates();
+  document.querySelectorAll('.skill-slot').forEach((slot, i) => {
+    if (i >= skillStates.length) return;
+    const sk = skillStates[i];
+    const icon = slot.querySelector('.skill-icon');
+    const cdOverlay = slot.querySelector('.skill-cd-overlay');
+    if (icon) icon.textContent = sk.unlocked ? sk.icon : '🔒';
+    if (cdOverlay) cdOverlay.style.height = sk.unlocked && sk.currentCd > 0 ? (sk.currentCd / sk.cooldown * 100) + '%' : '0%';
+    slot.style.borderColor = sk.unlocked ? (sk.currentCd > 0 ? '#666' : '#4caf50') : '#444';
+  });
+
+  // Отображение экипировки
+  const equipDisp = document.getElementById('equip-display');
+  if (equipDisp) {
+    const sw = getEquippedSword();
+    equipDisp.textContent = sw ? '⚔️ ' + sw.name : '';
+  }
+
+  const comp = getComposer();
+  if (comp) comp.render();
+  else renderer.render(scene, camera);
   requestAnimationFrame(update);
 }
 

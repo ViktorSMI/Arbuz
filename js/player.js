@@ -166,6 +166,13 @@ export const player = {
   kills: 0,
   seeds: 0,
   upgrades: { hp: 0, damage: 0, stamina: 0, speed: 0 },
+  blocking: false,
+  parrying: false,
+  parryTimer: 0,
+  parrySuccess: false,
+  blockDmgReduction: 0.6,
+  equipment: { sword: 'basic', armor: 'none' },
+  inventory: [],
 };
 
 export const camState = {
