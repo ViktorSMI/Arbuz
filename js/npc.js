@@ -124,9 +124,6 @@ function createNpcMesh(def) {
   legR.position.set(0.2, 0.25, 0);
   g.add(legR); g.userData.legR = legR;
 
-  const excGeo = new THREE.TextGeometry
-    ? null
-    : new THREE.SphereGeometry(0.15, 6, 6);
   const excMat = new THREE.MeshStandardMaterial({ color: 0xfdd835, emissive: 0xfdd835, emissiveIntensity: 0.5 });
   const exclamation = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), excMat);
   exclamation.position.y = 3.8;
