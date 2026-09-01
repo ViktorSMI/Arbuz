@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Интерактивный проекционный зал">
+  <title>Проекционный зал</title>
+  <link rel="icon" href="data:,">
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html,
+    body,
+    canvas {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #010305;
+    }
+
+    canvas {
+      display: block;
+      outline: none;
+      cursor: grab;
+    }
+
+    canvas:active {
+      cursor: grabbing;
+    }
+
+    video {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="room" tabindex="0" aria-label="Интерактивный проекционный зал"></canvas>
+  <video
+    id="projection"
+    src="./dynamic-island-360-loop.mp4"
+    preload="auto"
+    loop
+    muted
+    playsinline
+    aria-hidden="true"
+  ></video>
+
+  <script type="module">
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js";
+
+    const ROOM = Object.freeze({
+      length: 20,
+      width: 10,
+      height: 5,
+      eyeHeight: 1.7,
+    });
+
+    const canvas = document.querySelector("#room");
+    const video = document.querySelector("#projection");
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: "high-performance",
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x010305);
+
+    const camera = new THREE.PerspectiveCamera(
+      72,
+      window.innerWidth / window.innerHeight,
+      0.05,
+      100,
+    );
+    camera.position.set(8.2, ROOM.eyeHeight, 0);
+
+    video.loop = true;
+    video.muted = true;
+    video.playsInline = true;
+
+    const videoTexture = new THREE.VideoTexture(video);
+    videoTexture.colorSpace = THREE.SRGBColorSpace;
+    videoTexture.minFilter = THREE.LinearFilter;
+    videoTexture.magFilter = THREE.LinearFilter;
+    videoTexture.generateMipmaps = false;
+
+    const vertexShader = [
+      "varying vec3 vWorldPosition;",
+      "void main() {",
+      "  vec4 worldPosition = modelMatrix * vec4(position, 1.0);",
+      "  vWorldPosition = worldPosition.xyz;",
+      "  gl_Position = projectionMatrix * viewMatrix * worldPosition;",
+      "}",
+    ].join("\n");
+
+    const fragmentShader = [
+      "uniform sampler2D uVideo;",
+      "uniform vec3 uProjectionOrigin;",
+      "uniform float uBrightness;",
+      "varying vec3 vWorldPosition;",
+      "const float PI = 3.141592653589793;",
+      "void main() {",
+      "  vec3 direction = normalize(vWorldPosition - uProjectionOrigin);",
+      "  vec3 sampleDirection = normalize(vec3(-direction.x, direction.y, -direction.z));",
+      "  float longitude = atan(sampleDirection.z, sampleDirection.x);",
+      "  float latitude = acos(clamp(sampleDirection.y, -1.0, 1.0));",
+      "  vec2 uv = vec2(fract(longitude / (2.0 * PI) + 0.5), clamp(latitude / PI, 0.001, 0.999));",
+      "  vec3 color = texture2D(uVideo, uv).rgb * uBrightness;",
+      "  gl_FragColor = vec4(color, 1.0);",
+      "}",
+    ].join("\n");
+
+    const projectionMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uVideo: { value: videoTexture },
+        uProjectionOrigin: { value: new THREE.Vector3(0, ROOM.eyeHeight, 0) },
+        uBrightness: { value: 1.08 },
+      },
+      vertexShader,
+      fragmentShader,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+
+    const blackMaterial = new THREE.MeshStandardMaterial({
+      color: 0x020508,
+      roughness: 0.82,
+      metalness: 0.18,
+    });
+
+    function surface(width, height, x, y, z, rx, ry, rz, material) {
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+      mesh.position.set(x, y, z);
+      mesh.rotation.set(rx, ry, rz);
+      scene.add(mesh);
+      return mesh;
+    }
+
+    const halfLength = ROOM.length / 2;
+    const halfWidth = ROOM.width / 2;
+    const halfHeight = ROOM.height / 2;
+
+    surface(
+      ROOM.width,
+      ROOM.height,
+      -halfLength,
+      halfHeight,
+      0,
+      0,
+      Math.PI / 2,
+      0,
+      projectionMaterial,
+    );
+    surface(
+      ROOM.width,
+      ROOM.height,
+      halfLength,
+      halfHeight,
+      0,
+      0,
+      -Math.PI / 2,
+      0,
+      projectionMaterial,
+    );
+    surface(
+      ROOM.length,
+      ROOM.height,
+      0,
+      halfHeight,
+      -halfWidth,
+      0,
+      0,
+      0,
+      projectionMaterial,
+    );
+    surface(
+      ROOM.length,
+      ROOM.height,
+      0,
+      halfHeight,
+      halfWidth,
+      0,
+      Math.PI,
+      0,
+      projectionMaterial,
+    );
+    surface(
+      ROOM.length,
+      ROOM.width,
+      0,
+      0,
+      0,
+      -Math.PI / 2,
+      0,
+      0,
+      projectionMaterial,
+    );
+    const ceiling = surface(
+      ROOM.length,
+      ROOM.width,
+      0,
+      ROOM.height,
+      0,
+      Math.PI / 2,
+      0,
+      0,
+      blackMaterial,
+    );
+    ceiling.name = "DarkTechnicalCeiling";
+
+    function box(name, sx, sy, sz, x, y, z, material) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
+      mesh.name = name;
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+      return mesh;
+    }
+
+    const corners = [
+      [-halfLength, -halfWidth],
+      [-halfLength, halfWidth],
+      [halfLength, -halfWidth],
+      [halfLength, halfWidth],
+    ];
+    corners.forEach(([x, z], index) => {
+      box("Corner" + index, 0.12, ROOM.height, 0.12, x, halfHeight, z, blackMaterial);
+    });
+
+    [
+      [ROOM.length, 0.12, 0.1, 0, 4.94, -4.96],
+      [ROOM.length, 0.12, 0.1, 0, 4.94, 4.96],
+      [0.1, 0.12, ROOM.width, -9.96, 4.94, 0],
+      [0.1, 0.12, ROOM.width, 9.96, 4.94, 0],
+      [ROOM.length, 0.07, 0.06, 0, 0.035, -4.97],
+      [ROOM.length, 0.07, 0.06, 0, 0.035, 4.97],
+      [0.06, 0.07, ROOM.width, -9.97, 0.035, 0],
+      [0.06, 0.07, ROOM.width, 9.97, 0.035, 0],
+    ].forEach(([sx, sy, sz, x, y, z], index) => {
+      box("Beam" + index, sx, sy, sz, x, y, z, blackMaterial);
+    });
+
+    [-8, -4, 0, 4, 8].forEach((x, index) => {
+      box("Truss" + index, 0.09, 0.1, 9.8, x, 4.84, 0, blackMaterial);
+    });
+
+    const chairFabric = new THREE.MeshStandardMaterial({
+      color: 0x082a68,
+      roughness: 0.58,
+      metalness: 0,
+    });
+    const chairFrame = new THREE.MeshStandardMaterial({
+      color: 0x05090f,
+      roughness: 0.3,
+      metalness: 0.72,
+    });
+    const obstacles = [];
+
+    function chair(x, z, index) {
+      const group = new THREE.Group();
+      group.name = "Chair" + index;
+
+      const seat = new THREE.Mesh(
+        new THREE.BoxGeometry(0.46, 0.09, 0.46),
+        chairFabric,
+      );
+      seat.position.set(0, 0.44, 0);
+
+      const back = new THREE.Mesh(
+        new THREE.BoxGeometry(0.07, 0.5, 0.46),
+        chairFabric,
+      );
+      back.position.set(0.2, 0.73, 0);
+      back.rotation.z = -0.1;
+
+      const pedestal = new THREE.Mesh(
+        new THREE.BoxGeometry(0.07, 0.37, 0.28),
+        chairFrame,
+      );
+      pedestal.position.set(0.03, 0.22, 0);
+
+      const foot = new THREE.Mesh(
+        new THREE.BoxGeometry(0.4, 0.05, 0.36),
+        chairFrame,
+      );
+      foot.position.set(0.03, 0.025, 0);
+
+      [seat, back, pedestal, foot].forEach((part) => {
+        part.castShadow = true;
+        part.receiveShadow = true;
+        group.add(part);
+      });
+
+      group.position.set(x, 0, z);
+      scene.add(group);
+      obstacles.push({
+        minX: x - 0.35,
+        maxX: x + 0.35,
+        minZ: z - 0.35,
+        maxZ: z + 0.35,
+      });
+    }
+
+    let chairIndex = 0;
+    [-2.8, -0.7, 1.4, 3.5].forEach((x) => {
+      [-3.35, -2.25, -1.15, 1.15, 2.25, 3.35].forEach((z) => {
+        chairIndex += 1;
+        chair(x, z, chairIndex);
+      });
+    });
+
+    const hemisphere = new THREE.HemisphereLight(0x4f9ccc, 0x04070d, 1.7);
+    scene.add(hemisphere);
+
+    const coolLight = new THREE.PointLight(0x63b7ff, 42, 15, 2);
+    coolLight.position.set(2, 4.45, 0);
+    coolLight.castShadow = true;
+    scene.add(coolLight);
+
+    const warmLight = new THREE.PointLight(0xff8a42, 30, 12, 2);
+    warmLight.position.set(-5.7, 4.1, 0);
+    scene.add(warmLight);
+
+    const shadowFloor = new THREE.Mesh(
+      new THREE.PlaneGeometry(ROOM.length, ROOM.width),
+      new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.32 }),
+    );
+    shadowFloor.rotation.x = -Math.PI / 2;
+    shadowFloor.position.y = 0.012;
+    shadowFloor.receiveShadow = true;
+    scene.add(shadowFloor);
+
+    const keys = new Set();
+    let yaw = Math.PI / 2;
+    let pitch = -0.015;
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    const radius = 0.28;
+
+    function applyRotation() {
+      camera.rotation.order = "YXZ";
+      camera.rotation.set(pitch, yaw, 0);
+    }
+
+    function rotate(dx, dy) {
+      yaw -= dx * 0.0018;
+      pitch -= dy * 0.0018;
+      pitch = THREE.MathUtils.clamp(
+        pitch,
+        THREE.MathUtils.degToRad(-82),
+        THREE.MathUtils.degToRad(82),
+      );
+      applyRotation();
+    }
+
+    function collides(x, z) {
+      return obstacles.some(
+        (obstacle) =>
+          x + radius > obstacle.minX &&
+          x - radius < obstacle.maxX &&
+          z + radius > obstacle.minZ &&
+          z - radius < obstacle.maxZ,
+      );
+    }
+
+    function updateMovement(delta) {
+      const forwardInput = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0);
+      const rightInput = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
+      if (forwardInput === 0 && rightInput === 0) return;
+
+      const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+      const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+      const direction = new THREE.Vector3()
+        .addScaledVector(forward, forwardInput)
+        .addScaledVector(right, rightInput)
+        .normalize();
+      const running = keys.has("ShiftLeft") || keys.has("ShiftRight");
+      const distance = (running ? 5.6 : 3.2) * Math.min(delta, 0.05);
+
+      const nextX = camera.position.x + direction.x * distance;
+      const nextZ = camera.position.z + direction.z * distance;
+      if (!collides(nextX, camera.position.z)) {
+        camera.position.x = THREE.MathUtils.clamp(nextX, -9.58, 9.58);
+      }
+      if (!collides(camera.position.x, nextZ)) {
+        camera.position.z = THREE.MathUtils.clamp(nextZ, -4.58, 4.58);
+      }
+      camera.position.y = ROOM.eyeHeight;
+    }
+
+    document.addEventListener("keydown", (event) => {
+      if (["KeyW", "KeyA", "KeyS", "KeyD", "ShiftLeft", "ShiftRight"].includes(event.code)) {
+        event.preventDefault();
+        keys.add(event.code);
+      }
+    });
+    document.addEventListener("keyup", (event) => keys.delete(event.code));
+    window.addEventListener("blur", () => keys.clear());
+
+    document.addEventListener("mousemove", (event) => {
+      if (document.pointerLockElement === canvas) {
+        rotate(event.movementX, event.movementY);
+      }
+    });
+
+    canvas.addEventListener("pointerdown", (event) => {
+      dragging = true;
+      lastX = event.clientX;
+      lastY = event.clientY;
+      canvas.setPointerCapture(event.pointerId);
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (!dragging || document.pointerLockElement === canvas) return;
+      rotate(event.clientX - lastX, event.clientY - lastY);
+      lastX = event.clientX;
+      lastY = event.clientY;
+    });
+    canvas.addEventListener("pointerup", () => {
+      dragging = false;
+    });
+    canvas.addEventListener("pointercancel", () => {
+      dragging = false;
+    });
+    canvas.addEventListener("click", () => {
+      canvas.focus({ preventScroll: true });
+      canvas.requestPointerLock();
+      if (video.paused) video.play().catch(console.error);
+    });
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
+      renderer.setSize(window.innerWidth, window.innerHeight, false);
+    });
+
+    applyRotation();
+    video.load();
+    video.play().catch(() => {});
+
+    const clock = new THREE.Clock();
+    function render() {
+      updateMovement(clock.getDelta());
+      renderer.render(scene, camera);
+      requestAnimationFrame(render);
+    }
+
+    window.__projectionHall = {
+      renderer,
+      scene,
+      camera,
+      video,
+      projectionMaterial,
+      projectionOrigin: projectionMaterial.uniforms.uProjectionOrigin.value,
+      ceiling,
+      obstacles,
+    };
+    document.documentElement.dataset.ready = "true";
+    render();
+  </script>
+</body>
+</html>
