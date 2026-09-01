@@ -45,13 +45,24 @@
 <body>
   <canvas id="room" tabindex="0" aria-label="Интерактивный проекционный зал"></canvas>
   <video
-    id="projection"
-    src="./dynamic-island-360-loop.mp4"
-    preload="auto"
-    loop
-    muted
-    playsinline
-    aria-hidden="true"
+    id="projection-center" src="./media/center.mp4" preload="auto"
+    loop muted playsinline aria-hidden="true"
+  ></video>
+  <video
+    id="projection-back" src="./media/back.mp4" preload="auto"
+    loop muted playsinline aria-hidden="true"
+  ></video>
+  <video
+    id="projection-right" src="./media/right.mp4" preload="auto"
+    loop muted playsinline aria-hidden="true"
+  ></video>
+  <video
+    id="projection-left" src="./media/left.mp4" preload="auto"
+    loop muted playsinline aria-hidden="true"
+  ></video>
+  <video
+    id="projection-floor" src="./media/floor.mp4" preload="auto"
+    loop muted playsinline aria-hidden="true"
   ></video>
 
   <script type="module">
@@ -65,7 +76,13 @@
     });
 
     const canvas = document.querySelector("#room");
-    const video = document.querySelector("#projection");
+    const surfaceNames = ["center", "back", "right", "left", "floor"];
+    const videos = Object.fromEntries(
+      surfaceNames.map((name) => [
+        name,
+        document.querySelector(`#projection-${name}`),
+      ]),
+    );
 
     const renderer = new THREE.WebGLRenderer({
       canvas,
@@ -92,54 +109,32 @@
     );
     camera.position.set(8.2, ROOM.eyeHeight, 0);
 
-    video.loop = true;
-    video.muted = true;
-    video.playsInline = true;
+    const videoTextures = Object.fromEntries(
+      Object.entries(videos).map(([name, video]) => {
+        video.loop = true;
+        video.muted = true;
+        video.playsInline = true;
+        const texture = new THREE.VideoTexture(video);
+        texture.flipY = false;
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.generateMipmaps = false;
+        return [name, texture];
+      }),
+    );
 
-    const videoTexture = new THREE.VideoTexture(video);
-    videoTexture.flipY = false;
-    videoTexture.colorSpace = THREE.SRGBColorSpace;
-    videoTexture.minFilter = THREE.LinearFilter;
-    videoTexture.magFilter = THREE.LinearFilter;
-    videoTexture.generateMipmaps = false;
-
-    const vertexShader = [
-      "varying vec3 vWorldPosition;",
-      "void main() {",
-      "  vec4 worldPosition = modelMatrix * vec4(position, 1.0);",
-      "  vWorldPosition = worldPosition.xyz;",
-      "  gl_Position = projectionMatrix * viewMatrix * worldPosition;",
-      "}",
-    ].join("\n");
-
-    const fragmentShader = [
-      "uniform sampler2D uVideo;",
-      "uniform vec3 uProjectionOrigin;",
-      "uniform float uBrightness;",
-      "varying vec3 vWorldPosition;",
-      "const float PI = 3.141592653589793;",
-      "void main() {",
-      "  vec3 direction = normalize(vWorldPosition - uProjectionOrigin);",
-      "  vec3 sampleDirection = normalize(vec3(-direction.x, direction.y, -direction.z));",
-      "  float longitude = atan(sampleDirection.z, sampleDirection.x);",
-      "  float latitude = acos(clamp(sampleDirection.y, -1.0, 1.0));",
-      "  vec2 uv = vec2(fract(longitude / (2.0 * PI) + 0.5), clamp(latitude / PI, 0.001, 0.999));",
-      "  vec3 color = texture2D(uVideo, uv).rgb * uBrightness;",
-      "  gl_FragColor = vec4(color, 1.0);",
-      "}",
-    ].join("\n");
-
-    const projectionMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        uVideo: { value: videoTexture },
-        uProjectionOrigin: { value: new THREE.Vector3(0, ROOM.eyeHeight, 0) },
-        uBrightness: { value: 1.08 },
-      },
-      vertexShader,
-      fragmentShader,
-      side: THREE.DoubleSide,
-      toneMapped: false,
-    });
+    const projectionMaterials = Object.fromEntries(
+      Object.entries(videoTextures).map(([name, texture]) => {
+        const material = new THREE.MeshBasicMaterial({
+          map: texture,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+        });
+        material.name = `PhysicalScreen_${name}`;
+        return [name, material];
+      }),
+    );
 
     const blackMaterial = new THREE.MeshStandardMaterial({
       color: 0x020508,
@@ -168,7 +163,7 @@
       0,
       Math.PI / 2,
       0,
-      projectionMaterial,
+      projectionMaterials.center,
     );
     surface(
       ROOM.width,
@@ -179,7 +174,7 @@
       0,
       -Math.PI / 2,
       0,
-      projectionMaterial,
+      projectionMaterials.back,
     );
     surface(
       ROOM.length,
@@ -190,7 +185,7 @@
       0,
       0,
       0,
-      projectionMaterial,
+      projectionMaterials.right,
     );
     surface(
       ROOM.length,
@@ -201,7 +196,7 @@
       0,
       Math.PI,
       0,
-      projectionMaterial,
+      projectionMaterials.left,
     );
     surface(
       ROOM.length,
@@ -212,7 +207,7 @@
       -Math.PI / 2,
       0,
       0,
-      projectionMaterial,
+      projectionMaterials.floor,
     );
     const ceiling = surface(
       ROOM.length,
@@ -445,7 +440,9 @@
     canvas.addEventListener("click", () => {
       canvas.focus({ preventScroll: true });
       canvas.requestPointerLock();
-      if (video.paused) video.play().catch(console.error);
+      if (Object.values(videos).some((video) => video.paused)) {
+        playVideos();
+      }
     });
 
     window.addEventListener("resize", () => {
@@ -456,13 +453,53 @@
     });
 
     applyRotation();
-    video.load();
-    video.play().catch(() => {});
+
+    async function playVideos() {
+      const results = await Promise.allSettled(
+        Object.values(videos).map((video) => video.play()),
+      );
+      results.forEach((result) => {
+        if (result.status === "rejected") {
+          console.warn("Не удалось автоматически запустить видео", result.reason);
+        }
+      });
+    }
+
+    Object.entries(videos).forEach(([name, video]) => {
+      video.addEventListener("error", () => {
+        console.error(
+          `Не удалось загрузить экран ${name}. Media error:`,
+          video.error?.code ?? "unknown",
+        );
+      });
+      video.load();
+    });
+    playVideos();
 
     const clock = new THREE.Clock();
+    let firstFrameRendered = false;
+
     function render() {
       updateMovement(clock.getDelta());
+
+      const masterVideo = videos.center;
+      if (masterVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        Object.entries(videos).forEach(([name, video]) => {
+          if (
+            name !== "center" &&
+            video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+            Math.abs(video.currentTime - masterVideo.currentTime) > 0.05
+          ) {
+            video.currentTime = masterVideo.currentTime;
+          }
+        });
+      }
+
       renderer.render(scene, camera);
+      if (!firstFrameRendered) {
+        firstFrameRendered = true;
+        document.documentElement.dataset.ready = "true";
+      }
       requestAnimationFrame(render);
     }
 
@@ -470,13 +507,12 @@
       renderer,
       scene,
       camera,
-      video,
-      projectionMaterial,
-      projectionOrigin: projectionMaterial.uniforms.uProjectionOrigin.value,
+      videos,
+      videoTextures,
+      projectionMaterials,
       ceiling,
       obstacles,
     };
-    document.documentElement.dataset.ready = "true";
     render();
   </script>
 </body>
