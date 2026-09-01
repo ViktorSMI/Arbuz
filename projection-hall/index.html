@@ -97,6 +97,7 @@
     video.playsInline = true;
 
     const videoTexture = new THREE.VideoTexture(video);
+    videoTexture.flipY = false;
     videoTexture.colorSpace = THREE.SRGBColorSpace;
     videoTexture.minFilter = THREE.LinearFilter;
     videoTexture.magFilter = THREE.LinearFilter;
