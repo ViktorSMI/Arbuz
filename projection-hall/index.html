@@ -45,23 +45,23 @@
 <body>
   <canvas id="room" tabindex="0" aria-label="Интерактивный проекционный зал"></canvas>
   <video
-    id="projection-center" src="./media/center.mp4" preload="auto"
+    id="projection-center" crossorigin="anonymous" preload="auto"
     loop muted playsinline aria-hidden="true"
   ></video>
   <video
-    id="projection-back" src="./media/back.mp4" preload="auto"
+    id="projection-back" crossorigin="anonymous" preload="auto"
     loop muted playsinline aria-hidden="true"
   ></video>
   <video
-    id="projection-right" src="./media/right.mp4" preload="auto"
+    id="projection-right" crossorigin="anonymous" preload="auto"
     loop muted playsinline aria-hidden="true"
   ></video>
   <video
-    id="projection-left" src="./media/left.mp4" preload="auto"
+    id="projection-left" crossorigin="anonymous" preload="auto"
     loop muted playsinline aria-hidden="true"
   ></video>
   <video
-    id="projection-floor" src="./media/floor.mp4" preload="auto"
+    id="projection-floor" crossorigin="anonymous" preload="auto"
     loop muted playsinline aria-hidden="true"
   ></video>
 
@@ -74,6 +74,8 @@
       height: 5,
       eyeHeight: 1.7,
     });
+    const MEDIA_BASE =
+      "https://raw.githubusercontent.com/ViktorSMI/Arbuz/projection-hall-media";
 
     const canvas = document.querySelector("#room");
     const surfaceNames = ["center", "back", "right", "left", "floor"];
@@ -114,6 +116,7 @@
         video.loop = true;
         video.muted = true;
         video.playsInline = true;
+        video.src = `${MEDIA_BASE}/${name}.mp4`;
         const texture = new THREE.VideoTexture(video);
         texture.flipY = false;
         texture.colorSpace = THREE.SRGBColorSpace;
