@@ -196,7 +196,7 @@
         video.playsInline = true;
         video.src = `${MEDIA_BASE}/${name}.mp4`;
         const texture = new THREE.VideoTexture(video);
-        texture.flipY = false;
+        texture.flipY = true;
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.minFilter = THREE.LinearFilter;
         texture.magFilter = THREE.LinearFilter;
