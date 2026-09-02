@@ -75,85 +75,7 @@
       eyeHeight: 1.7,
     });
     const MEDIA_BASE =
-      "https://raw.githubusercontent.com/ViktorSMI/Arbuz/f12cfb8f01af4f310ec00518ed47d271f6c7d995";
-    const SEAM_WIDTH = 0.08;
-    const SURFACE_IDS = Object.freeze({
-      center: 0,
-      back: 1,
-      right: 2,
-      left: 3,
-      floor: 4,
-    });
-
-    const seamVertexShader = [
-      "varying vec2 vUv;",
-      "void main() {",
-      "  vUv = uv;",
-      "  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);",
-      "}",
-    ].join("\n");
-
-    const seamFragmentShader = [
-      "uniform sampler2D uCenter;",
-      "uniform sampler2D uBack;",
-      "uniform sampler2D uRight;",
-      "uniform sampler2D uLeft;",
-      "uniform sampler2D uFloor;",
-      "uniform int uSurface;",
-      "uniform float uSeam;",
-      "varying vec2 vUv;",
-      "vec3 decodeVideo(vec3 color) {",
-      "  bvec3 cutoff = lessThanEqual(color, vec3(0.04045));",
-      "  vec3 high = pow(color * 0.9478672986 + vec3(0.0521327014), vec3(2.4));",
-      "  vec3 low = color * 0.0773993808;",
-      "  return mix(high, low, cutoff);",
-      "}",
-      "vec3 sampleSurface(int surface, vec2 sampleUv) {",
-      "  vec2 safeUv = clamp(sampleUv, vec2(0.0), vec2(1.0));",
-      "  vec3 color;",
-      "  if (surface == 0) color = texture2D(uCenter, safeUv).rgb;",
-      "  else if (surface == 1) color = texture2D(uBack, safeUv).rgb;",
-      "  else if (surface == 2) color = texture2D(uRight, safeUv).rgb;",
-      "  else if (surface == 3) color = texture2D(uLeft, safeUv).rgb;",
-      "  else color = texture2D(uFloor, safeUv).rgb;",
-      "  return decodeVideo(color);",
-      "}",
-      "float edgeWeight(float distanceToEdge) {",
-      "  return 1.0 - smoothstep(0.0, uSeam, distanceToEdge);",
-      "}",
-      "void addNeighbor(inout vec3 colorSum, inout float weightSum, int surface, vec2 sampleUv, float weight) {",
-      "  colorSum += sampleSurface(surface, sampleUv) * weight;",
-      "  weightSum += weight;",
-      "}",
-      "void main() {",
-      "  vec3 colorSum = sampleSurface(uSurface, vUv);",
-      "  float weightSum = 1.0;",
-      "  if (uSurface == 0) {",
-      "    addNeighbor(colorSum, weightSum, 3, vec2(1.0 - vUv.x, vUv.y), edgeWeight(vUv.x));",
-      "    addNeighbor(colorSum, weightSum, 2, vec2(1.0 - vUv.x, vUv.y), edgeWeight(1.0 - vUv.x));",
-      "    addNeighbor(colorSum, weightSum, 4, vec2(vUv.y, vUv.x), edgeWeight(vUv.y));",
-      "  } else if (uSurface == 1) {",
-      "    addNeighbor(colorSum, weightSum, 2, vec2(1.0 - vUv.x, vUv.y), edgeWeight(vUv.x));",
-      "    addNeighbor(colorSum, weightSum, 3, vec2(1.0 - vUv.x, vUv.y), edgeWeight(1.0 - vUv.x));",
-      "    addNeighbor(colorSum, weightSum, 4, vec2(1.0 - vUv.y, 1.0 - vUv.x), edgeWeight(vUv.y));",
-      "  } else if (uSurface == 2) {",
-      "    addNeighbor(colorSum, weightSum, 0, vec2(1.0 - vUv.x, vUv.y), edgeWeight(vUv.x));",
-      "    addNeighbor(colorSum, weightSum, 1, vec2(1.0 - vUv.x, vUv.y), edgeWeight(1.0 - vUv.x));",
-      "    addNeighbor(colorSum, weightSum, 4, vec2(vUv.x, 1.0 - vUv.y), edgeWeight(vUv.y));",
-      "  } else if (uSurface == 3) {",
-      "    addNeighbor(colorSum, weightSum, 1, vec2(1.0 - vUv.x, vUv.y), edgeWeight(vUv.x));",
-      "    addNeighbor(colorSum, weightSum, 0, vec2(1.0 - vUv.x, vUv.y), edgeWeight(1.0 - vUv.x));",
-      "    addNeighbor(colorSum, weightSum, 4, vec2(1.0 - vUv.x, vUv.y), edgeWeight(vUv.y));",
-      "  } else {",
-      "    addNeighbor(colorSum, weightSum, 0, vec2(vUv.y, vUv.x), edgeWeight(vUv.x));",
-      "    addNeighbor(colorSum, weightSum, 1, vec2(1.0 - vUv.y, 1.0 - vUv.x), edgeWeight(1.0 - vUv.x));",
-      "    addNeighbor(colorSum, weightSum, 3, vec2(1.0 - vUv.x, vUv.y), edgeWeight(vUv.y));",
-      "    addNeighbor(colorSum, weightSum, 2, vec2(vUv.x, 1.0 - vUv.y), edgeWeight(1.0 - vUv.y));",
-      "  }",
-      "  gl_FragColor = vec4(colorSum / weightSum, 1.0);",
-      "  #include <colorspace_fragment>",
-      "}",
-    ].join("\n");
+      "https://raw.githubusercontent.com/ViktorSMI/Arbuz/7b021f2400150bb2a7e65229f1aa9410a566fa18";
 
     const canvas = document.querySelector("#room");
     const surfaceNames = ["center", "back", "right", "left", "floor"];
@@ -206,23 +128,13 @@
     );
 
     const projectionMaterials = Object.fromEntries(
-      Object.keys(videoTextures).map((name) => {
-        const material = new THREE.ShaderMaterial({
-          uniforms: {
-            uCenter: { value: videoTextures.center },
-            uBack: { value: videoTextures.back },
-            uRight: { value: videoTextures.right },
-            uLeft: { value: videoTextures.left },
-            uFloor: { value: videoTextures.floor },
-            uSurface: { value: SURFACE_IDS[name] },
-            uSeam: { value: SEAM_WIDTH },
-          },
-          vertexShader: seamVertexShader,
-          fragmentShader: seamFragmentShader,
+      Object.entries(videoTextures).map(([name, texture]) => {
+        const material = new THREE.MeshBasicMaterial({
+          map: texture,
           side: THREE.DoubleSide,
           toneMapped: false,
         });
-        material.name = `SmoothRayFinal_${name}`;
+        material.name = `DirectProjection_${name}`;
         return [name, material];
       }),
     );
