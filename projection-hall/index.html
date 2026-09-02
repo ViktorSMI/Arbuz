@@ -45,23 +45,7 @@
 <body>
   <canvas id="room" tabindex="0" aria-label="Интерактивный проекционный зал"></canvas>
   <video
-    id="projection-center" crossorigin="anonymous" preload="auto"
-    loop muted playsinline aria-hidden="true"
-  ></video>
-  <video
-    id="projection-back" crossorigin="anonymous" preload="auto"
-    loop muted playsinline aria-hidden="true"
-  ></video>
-  <video
-    id="projection-right" crossorigin="anonymous" preload="auto"
-    loop muted playsinline aria-hidden="true"
-  ></video>
-  <video
-    id="projection-left" crossorigin="anonymous" preload="auto"
-    loop muted playsinline aria-hidden="true"
-  ></video>
-  <video
-    id="projection-floor" crossorigin="anonymous" preload="auto"
+    id="projection-atlas" crossorigin="anonymous" preload="auto"
     loop muted playsinline aria-hidden="true"
   ></video>
 
@@ -75,16 +59,23 @@
       eyeHeight: 1.7,
     });
     const MEDIA_BASE =
-      "https://raw.githubusercontent.com/ViktorSMI/Arbuz/d5480a8b56e718bcb82aa159bc6964a0914dc660";
+      "https://raw.githubusercontent.com/ViktorSMI/Arbuz/f1b248443a2282da1dbf1da16a0399f4105a5b0a";
+    const ATLAS = Object.freeze({
+      width: 4800,
+      height: 2400,
+      regions: Object.freeze({
+        right: Object.freeze({ x: 0, y: 0, width: 2400, height: 600 }),
+        left: Object.freeze({ x: 2400, y: 0, width: 2400, height: 600 }),
+        center: Object.freeze({ x: 0, y: 600, width: 1200, height: 600 }),
+        back: Object.freeze({ x: 1200, y: 600, width: 1200, height: 600 }),
+        floor: Object.freeze({ x: 0, y: 1200, width: 2400, height: 1200 }),
+      }),
+    });
 
     const canvas = document.querySelector("#room");
+    const video = document.querySelector("#projection-atlas");
     const surfaceNames = ["center", "back", "right", "left", "floor"];
-    const videos = Object.fromEntries(
-      surfaceNames.map((name) => [
-        name,
-        document.querySelector(`#projection-${name}`),
-      ]),
-    );
+    const videos = Object.freeze({ atlas: video });
 
     const renderer = new THREE.WebGLRenderer({
       canvas,
@@ -111,20 +102,18 @@
     );
     camera.position.set(8.2, ROOM.eyeHeight, 0);
 
+    video.loop = true;
+    video.muted = true;
+    video.playsInline = true;
+    video.src = `${MEDIA_BASE}/atlas.mp4`;
+    const atlasTexture = new THREE.VideoTexture(video);
+    atlasTexture.flipY = true;
+    atlasTexture.colorSpace = THREE.SRGBColorSpace;
+    atlasTexture.minFilter = THREE.LinearFilter;
+    atlasTexture.magFilter = THREE.LinearFilter;
+    atlasTexture.generateMipmaps = false;
     const videoTextures = Object.fromEntries(
-      Object.entries(videos).map(([name, video]) => {
-        video.loop = true;
-        video.muted = true;
-        video.playsInline = true;
-        video.src = `${MEDIA_BASE}/${name}.mp4`;
-        const texture = new THREE.VideoTexture(video);
-        texture.flipY = true;
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-        texture.generateMipmaps = false;
-        return [name, texture];
-      }),
+      surfaceNames.map((name) => [name, atlasTexture]),
     );
 
     const projectionMaterials = Object.fromEntries(
@@ -145,8 +134,25 @@
       metalness: 0.18,
     });
 
-    function surface(width, height, x, y, z, rx, ry, rz, material) {
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+    function surface(width, height, x, y, z, rx, ry, rz, material, region) {
+      const geometry = new THREE.PlaneGeometry(width, height);
+      if (region) {
+        const offsetX = (region.x + 0.5) / ATLAS.width;
+        const offsetY =
+          (ATLAS.height - region.y - region.height + 0.5) / ATLAS.height;
+        const scaleX = (region.width - 1) / ATLAS.width;
+        const scaleY = (region.height - 1) / ATLAS.height;
+        const uv = geometry.attributes.uv;
+        for (let index = 0; index < uv.count; index += 1) {
+          uv.setXY(
+            index,
+            offsetX + uv.getX(index) * scaleX,
+            offsetY + uv.getY(index) * scaleY,
+          );
+        }
+        uv.needsUpdate = true;
+      }
+      const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(x, y, z);
       mesh.rotation.set(rx, ry, rz);
       scene.add(mesh);
@@ -167,6 +173,7 @@
       Math.PI / 2,
       0,
       projectionMaterials.center,
+      ATLAS.regions.center,
     );
     surface(
       ROOM.width,
@@ -178,6 +185,7 @@
       -Math.PI / 2,
       0,
       projectionMaterials.back,
+      ATLAS.regions.back,
     );
     surface(
       ROOM.length,
@@ -189,6 +197,7 @@
       0,
       0,
       projectionMaterials.right,
+      ATLAS.regions.right,
     );
     surface(
       ROOM.length,
@@ -200,6 +209,7 @@
       Math.PI,
       0,
       projectionMaterials.left,
+      ATLAS.regions.left,
     );
     surface(
       ROOM.length,
@@ -211,6 +221,7 @@
       0,
       0,
       projectionMaterials.floor,
+      ATLAS.regions.floor,
     );
     const ceiling = surface(
       ROOM.length,
@@ -482,32 +493,8 @@
     const clock = new THREE.Clock();
     let firstFrameRendered = false;
 
-    function circularVideoDrift(video, masterVideo) {
-      let drift = video.currentTime - masterVideo.currentTime;
-      const duration = masterVideo.duration;
-      if (!Number.isFinite(duration) || duration <= 0) return drift;
-      const halfDuration = duration / 2;
-      if (drift > halfDuration) drift -= duration;
-      if (drift < -halfDuration) drift += duration;
-      return drift;
-    }
-
     function render() {
       updateMovement(clock.getDelta());
-
-      const masterVideo = videos.center;
-      if (masterVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        Object.entries(videos).forEach(([name, video]) => {
-          if (
-            name !== "center" &&
-            video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-            Math.abs(circularVideoDrift(video, masterVideo)) > 0.05
-          ) {
-            video.currentTime = masterVideo.currentTime;
-          }
-        });
-      }
-
       renderer.render(scene, camera);
       if (!firstFrameRendered) {
         firstFrameRendered = true;
