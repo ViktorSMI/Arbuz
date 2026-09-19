@@ -1,0 +1,62 @@
+:root{--green:#b2c89a;--green-2:#728767;--red:#c77b68;--gold:#d7bf8c;--orange:#ca9970;--text:#f1eddd;--muted:#9fa79c;--panel:rgba(16,22,20,.95);--line:rgba(215,191,140,.22)}
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text);background:#131b1b}
+button,a,input,select{touch-action:manipulation}
+button:focus-visible,a:focus-visible,summary:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:5px}
+#blocker{padding:0;justify-content:flex-start;background:linear-gradient(90deg,rgba(9,16,16,.97),rgba(9,16,16,.81) 32%,rgba(9,16,16,.12) 72%),linear-gradient(0deg,rgba(9,16,16,.55),transparent 35%);backdrop-filter:none}
+.menu-card{width:100%;min-height:100vh;display:block;border:0;border-radius:0;background:none;box-shadow:none;overflow:visible}
+.menu-main{width:min(530px,48vw);min-height:100vh;padding:9vh 0 8vh 6vw;justify-content:center}
+.menu-kicker{font-size:10px;font-weight:500;letter-spacing:.32em;color:var(--gold);margin-bottom:25px}
+.menu-card h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:clamp(58px,7.6vw,112px);letter-spacing:-.04em;line-height:.93}
+.menu-card h1 span{color:#d7bf8c;-webkit-text-stroke:0;font-size:.77em;letter-spacing:.13em;margin-top:8px}
+.menu-lead{font-size:14px;line-height:1.85;color:#bec5b9;margin-top:29px;max-width:340px}
+.menu-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;max-width:296px;margin-top:27px}
+.menu-button,.panel-button,.choice-button,.upgrade-button{border-radius:3px;font-size:12px;font-weight:600;letter-spacing:.055em;min-height:45px;transition:background .18s,border-color .18s,transform .18s}
+.menu-button{text-decoration:none;display:flex;align-items:center;justify-content:center}
+.menu-button.primary,.panel-button.primary,.menu-button.continue{color:#24291f;background:linear-gradient(110deg,#ddd0aa,#bba675);box-shadow:none}
+.menu-button.ghost,.panel-button.ghost{border-color:rgba(215,191,140,.25);background:rgba(13,23,21,.40);color:#d3d6c7}
+.menu-button:hover,.panel-button:hover{transform:translateX(3px)}
+.menu-side{position:absolute;bottom:7vh;right:4vw;width:245px;padding:20px 0 0;background:none;border:0;border-top:1px solid rgba(220,210,174,.4);font-size:12px}
+.menu-side h2{font-family:Georgia,serif;font-weight:400;font-size:21px;color:#eee7d0}
+.menu-side p{color:#d0d3c0;line-height:1.7;text-shadow:0 1px 6px #17251d}
+.menu-watermelon{display:none}
+.menu-foot{max-width:320px;color:#8a9789;font-size:11px;line-height:1.8;margin-top:23px}
+.menu-foot summary{cursor:pointer;color:#b9c6b0;letter-spacing:.07em;padding-bottom:5px}
+body[data-game-state="menu"] #game-root > :not(#blocker){display:none!important}
+#hud{top:29px;left:30px;gap:7px;filter:drop-shadow(0 2px 6px #12201b)}
+.bar-wrap{height:12px;border-radius:2px;width:258px;border:1px solid rgba(218,209,178,.3);background:rgba(13,23,20,.75);box-shadow:none}
+.bar-fill{border-radius:0}
+.bar-label{font-size:7px;letter-spacing:.14em;opacity:.85}
+#hp-bar .bar-fill{background:linear-gradient(90deg,#753f38,#bf816b)}
+#stam-bar .bar-fill{background:linear-gradient(90deg,#596c48,#b1bd84)}
+#xp-bar{top:69px;left:30px}#xp-bar .bar-wrap{width:195px;height:4px}#xp-bar .bar-label{display:none}
+#level-display{top:85px;left:31px;font-size:10px}#kill-counter{display:none}
+#seeds-counter{top:103px;left:31px;font-size:10px;color:#d7bf8c}
+#reputation-display{top:121px;left:31px;font-size:9px}#companion-status{top:139px;left:31px;font-size:10px}
+#mission-card{top:28px;right:30px;width:260px;border:0;border-left:1px solid rgba(218,209,178,.4);padding:2px 0 2px 17px;border-radius:0;background:linear-gradient(90deg,rgba(12,23,21,.48),transparent);backdrop-filter:none;box-shadow:none}
+.mission-kicker{color:#d2c396;letter-spacing:.19em;font-weight:500;font-size:8px}#mission-act{font-family:Georgia,serif;font-weight:400;font-size:19px;color:#f1ecd8;margin-top:6px}
+#mission-objective{font-size:11px;color:#d5dacc}.mission-progress{height:2px;max-width:135px;opacity:.55;margin-top:11px}#mission-secondary{font-size:9px;color:#b4bfad}
+#compass{top:28px;border:0;border-radius:0;background:none;color:#f2edda;letter-spacing:.09em;font-size:10px;min-width:150px;padding:6px 0;border-top:1px solid rgba(220,210,174,.3);border-bottom:1px solid rgba(220,210,174,.3);backdrop-filter:none}
+#time-indicator{display:none}
+#minimap{right:29px;bottom:28px;width:115px;height:115px;border:1px solid rgba(214,193,148,.55);opacity:.86;box-shadow:0 4px 22px #10221b55}
+#equip-display{left:30px;bottom:27px;font-size:10px;color:#d4dbc8;letter-spacing:.04em}
+#crosshair{width:4px;height:4px;margin:-2px;opacity:.6;border:1px solid #e6e0c8;border-radius:50%}#crosshair::before,#crosshair::after{display:none}
+#skill-bar{bottom:28px;gap:8px} .skill-slot{width:42px;height:43px;border:1px solid rgba(214,193,148,.4)!important;border-radius:3px;background:rgba(12,22,19,.67);box-shadow:none;color:#d7cbab}
+.skill-slot[aria-disabled="true"]{opacity:.5}.skill-key{color:#b5bda9;font-size:7px}.skill-name{font-size:8px;bottom:-16px;color:#d0d7c3}.skill-icon{display:grid;place-items:center}.skill-icon svg{width:24px;height:24px}
+#boss-hp .bar-wrap{border-radius:0;height:11px;border-color:#e2c38a55}#boss-hp .name{font-family:Georgia,serif;font-size:18px;letter-spacing:.08em;font-weight:400;color:#ece4c7}
+#boss-hp .bar-fill{background:linear-gradient(90deg,#643c35,#c38b71)}
+#tutorial-card{display:none!important}
+.panel,#npc-dialogue,#lore-popup,#dialogue-panel{border-radius:5px;border-color:rgba(217,190,137,.3);background:rgba(13,23,21,.96)}
+.panel h2{font-family:Georgia,serif;font-weight:400;font-size:29px}.panel-kicker{color:var(--gold);letter-spacing:.15em;font-weight:400}
+.panel-close{border-radius:3px}.panel{max-height:85vh;overflow:auto}
+#quest-list h3{font-family:Georgia,serif;font-size:19px;font-weight:400;color:var(--gold);margin:0 0 9px}#quest-list p{line-height:1.7;font-size:13px;color:#c0cbb9}
+#campaign-stats{display:block;font-size:12px;color:#9fb195;border-bottom:1px solid var(--line);padding-bottom:15px}
+select{color:var(--text);background:#192823;border:1px solid var(--line);padding:9px;border-radius:3px;width:100%}
+#death-screen{background:rgba(12,13,12,.6);backdrop-filter:blur(3px)}#death-screen h1{font-family:Georgia,serif;font-weight:400;color:#b99178;letter-spacing:.10em;text-shadow:none}
+#loading-screen{background:#182520}.loading-mark{font-size:38px}.loading-copy{letter-spacing:.2em;font-size:10px;color:#bec9ad}
+@media(max-width:900px){.menu-main{width:58vw;padding-left:6vw}.menu-card h1{font-size:70px}.menu-side{width:190px}.menu-lead{max-width:290px;font-size:12px}#mission-card{width:210px}#compass{display:none}}
+@media(max-width:600px){#blocker{background:linear-gradient(90deg,#0c191bf2,#0c191bb3 65%,#0c191b55)}.menu-main{width:92vw;padding:45px 25px;min-height:100svh}.menu-card h1{font-size:67px}.menu-side{display:none}.menu-lead{max-width:310px}.menu-actions{max-width:280px}.menu-foot{font-size:10px}#hud{left:14px;top:18px}.bar-wrap{width:150px;height:10px}#xp-bar{left:14px;top:54px}#xp-bar .bar-wrap{width:115px}#level-display{top:67px;left:14px}#seeds-counter{top:84px;left:14px}#mission-card{right:13px;top:18px;width:158px;padding-left:10px}#mission-act{font-size:15px}#mission-objective{font-size:10px}#mission-secondary{font-size:8px}#minimap{display:none}#skill-bar{bottom:12px;gap:4px}.skill-slot{width:32px;height:33px}.skill-name{display:none}#equip-display{bottom:53px;left:14px;font-size:9px}.panel{padding:18px!important}.panel h2{font-size:24px}.form-row{grid-template-columns:1fr 120px}}
+@media(prefers-reduced-motion:reduce){.loading-mark{animation:none}button,a{transition:none!important}}
+
+#lore-popup-title{font-family:Georgia,serif;font-size:23px;color:var(--gold)}#lore-popup-text{margin-top:12px;font-size:13px;line-height:1.75;color:#cbd6c0}#lore-popup-counter{margin-top:15px;color:#91a289;font-size:10px}
+
+.skill-slot{pointer-events:auto;cursor:pointer}@media(pointer:coarse){#skill-bar{top:148px;bottom:auto;left:14px;transform:none}.skill-slot{width:34px;height:35px}#mission-card{pointer-events:none}}

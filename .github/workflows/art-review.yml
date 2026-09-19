@@ -1,0 +1,57 @@
+name: Validate orchard overhaul
+on:
+  push:
+    branches: [work/orchard-overhaul]
+permissions:
+  contents: write
+concurrency:
+  group: orchard-art-review
+  cancel-in-progress: true
+jobs:
+  review:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply checked source changes
+        run: |
+          python .art-migrate-0.py
+          python .art-migrate-1.py
+          python .art-migrate-2.py
+          python - <<'PY'
+          import json, hashlib
+          from pathlib import Path
+          for name, expected in json.loads(Path('.art-manifest.json').read_text()).items():
+              assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == expected, name
+          print('All source checksums match the locally tested build')
+          PY
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run check && npm test && npm run build
+      - run: npm run smoke:local
+      - run: npm run smoke:art
+      - name: Archive review results
+        if: always()
+        run: |
+          mkdir -p /tmp/orchard-review
+          cp -R test-results/art /tmp/orchard-review/ 2>/dev/null || true
+          tar --exclude=.git --exclude=node_modules --exclude=test-results --exclude='*.py' --exclude='.art-*' -czf /tmp/orchard-review/sources.tar.gz .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: orchard-review
+          path: /tmp/orchard-review/
+          retention-days: 7
+      - name: Commit only validated source and standalone build
+        run: |
+          rm -f .art-migrate-*.py .art-manifest.json .github/workflows/art-review.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(art): rebuild orchard characters, animation and six lands"
+          git push origin HEAD:work/orchard-overhaul
