@@ -6,9 +6,12 @@ on:
     paths:
       - 'js/**'
       - 'ui/**'
+      - 'css/**'
+      - 'assets/**'
       - 'scripts/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'index.html'
       - 'index3d.html'
       - '.github/workflows/build-standalone.yml'
 
@@ -35,7 +38,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -54,6 +57,19 @@ jobs:
 
       - name: Smoke-test direct file launch
         run: npm run smoke:local
+
+      - name: Archive browser build and sources
+        run: |
+          mkdir -p /tmp/arbuz-review
+          tar --exclude=.git --exclude=node_modules --exclude=projection-hall/media --exclude=test-results -czf /tmp/arbuz-review/browser-source.tar.gz .
+          tar -czf /tmp/arbuz-review/build-tools.tar.gz node_modules/three node_modules/esbuild node_modules/@esbuild
+
+      - name: Upload review build
+        uses: actions/upload-artifact@v4
+        with:
+          name: arbuz-visual-review
+          path: /tmp/arbuz-review/
+          retention-days: 7
 
       - name: Commit generated browser build
         run: |
