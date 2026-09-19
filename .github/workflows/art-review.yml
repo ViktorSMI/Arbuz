@@ -1,17 +1,17 @@
 name: Validate orchard overhaul
 on:
   push:
-    branches: [work/orchard-perf]
+    branches: [work/orchard-final]
 permissions:
   contents: write
 concurrency:
-  group: orchard-perf-review
+  group: orchard-final-review
   cancel-in-progress: true
 jobs:
   review:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,6 +37,7 @@ jobs:
           python .art-polish-5.py
           python .art-polish-6.py
           python .art-polish-7.py
+          python .art-polish-8.py
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run check && npm test && npm run build
@@ -61,4 +62,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "feat(art): rebuild orchard characters, animation and six lands"
-          git push origin HEAD:work/orchard-perf
+          git push origin HEAD:work/orchard-final
