@@ -10,7 +10,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check server.js && node --check js/bootstrap.js && node --check js/local-entry.js && node --check scripts/build-local.mjs"
+    "check": "node --check server.js && node --check js/bootstrap.js && node --check js/local-entry.js && node --check scripts/build-local.mjs && node --check scripts/smoke-local.mjs",
+    "smoke:local": "node scripts/smoke-local.mjs"
   },
   "engines": {
     "node": ">=20"

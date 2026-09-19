@@ -6,7 +6,7 @@ on:
     paths:
       - 'js/**'
       - 'ui/**'
-      - 'scripts/build-local.mjs'
+      - 'scripts/**'
       - 'package.json'
       - 'package-lock.json'
       - 'index3d.html'
@@ -34,8 +34,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: npm install
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Check sources
         run: npm run check
@@ -48,6 +51,9 @@ jobs:
           node --check js/game.bundle.js
           git diff --check
           test -s js/game.bundle.js
+
+      - name: Smoke-test direct file launch
+        run: npm run smoke:local
 
       - name: Commit generated browser build
         run: |
