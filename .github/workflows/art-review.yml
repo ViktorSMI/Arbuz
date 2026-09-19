@@ -35,6 +35,7 @@ jobs:
           python .art-polish-3.py
           python .art-polish-4.py
           python .art-polish-5.py
+          python .art-polish-6.py
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run check && npm test && npm run build
