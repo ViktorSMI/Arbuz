@@ -4,80 +4,71 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#07110b">
-  <title>Arbuz — игровая вселенная</title>
-  <meta name="description" content="Arbuz Souls: полноценная 3D-кампания, классическая аркада и проекционный зал.">
+  <title>Arbuz Souls</title>
+  <meta name="description" content="Последний арбуз проходит шесть земель, собирает камни памяти и идёт к Жан-Пьеру Дювалю.">
   <link rel="stylesheet" href="css/launcher.css">
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark">🍉</span><span>ARBUZ / GAME LAB</span></div>
-      <div class="badge">СБОРКА 2.0 · SINGLE PLAYER CAMPAIGN</div>
+      <div class="brand"><span class="brand-mark">🍉</span><span>ARBUZ SOULS</span></div>
+      <div class="badge">ПОСЛЕДНИЙ АРБУЗ</div>
     </header>
 
     <section class="hero">
       <div>
-        <p class="eyebrow">Шесть земель. Шесть боссов. Одна последняя семечка.</p>
+        <p class="eyebrow">Шесть стражей. Восемнадцать камней памяти.</p>
         <h1>ARBUZ <span>SOULS</span></h1>
-        <p class="lead">Теперь это не витрина механик, а законченная игровая кампания: главы, задачи, развилки в диалогах, прокачка, экипировка, компаньоны, лор, автосохранение и финал с New Game+.</p>
+        <p class="lead">Арбузилла должен победить шесть стражей и остановить Жан-Пьера Дюваля, который охотится за его семечкой.</p>
         <div class="hero-actions">
-          <a class="button button-primary" href="/game">Играть в кампанию <span>→</span></a>
-          <a class="button button-secondary" href="#modes">Все режимы</a>
+          <a class="button button-primary" href="/game">Начать путь <span>→</span></a>
+          <a class="button button-secondary" href="#modes">Режимы</a>
         </div>
       </div>
 
       <aside class="save-card" aria-live="polite">
-        <div class="save-kicker">Локальное сохранение</div>
+        <div class="save-kicker">Путь Арбузиллы</div>
         <div id="save-content">
-          <h2>Новая история</h2>
-          <p class="save-empty">Сохранение появится автоматически после начала кампании. Прогресс хранится в браузере и обновляется на контрольных точках.</p>
-          <a class="button button-primary" href="/game">Начать игру</a>
+          <h2>Начало</h2>
+          <p class="save-empty">Сохранений пока нет.</p>
+          <a class="button button-primary" href="/game">Новая игра</a>
         </div>
       </aside>
     </section>
 
     <section id="modes">
       <div class="section-head">
-        <h2>Три лица «Арбуза»</h2>
-        <p>Основной режим стал кампанией. Прежняя 2D-игра не потеряна: она сохранена отдельной аркадой. Экспериментальный зал тоже остаётся доступен.</p>
+        <h2>Режимы</h2>
       </div>
       <div class="modes">
         <a class="mode mode-primary" href="/game">
           <div class="mode-icon">⚔️</div>
           <h3>Arbuz Souls</h3>
-          <p>Полная 3D-кампания с шестью биомами, сюжетными актами, боссами, заданиями, билдами и New Game+.</p>
-          <span class="mode-label">Основная игра →</span>
+          <p>Зелёные холмы, Подземелья крыс, Вороньи скалы, Токсичная свалка, Военная база и Кухня ада.</p>
+          <span class="mode-label">Войти в мир →</span>
         </a>
         <a class="mode" href="/arcade">
           <div class="mode-icon">🕹️</div>
           <h3>World Conquest</h3>
-          <p>Оригинальная 2D-аркада про мировое господство. Быстрый бой, семечки, мутации и локальный мультиплеер.</p>
-          <span class="mode-label">Классический режим →</span>
+          <p>Война Арбузиллы за территории в классическом 2D-режиме.</p>
+          <span class="mode-label">Начать захват →</span>
         </a>
         <a class="mode" href="/projection-hall/">
           <div class="mode-icon">🎬</div>
           <h3>Projection Hall</h3>
-          <p>Иммерсивный экспериментальный зал с физическими экранами и видеопроекциями.</p>
           <span class="mode-label">Открыть зал →</span>
         </a>
       </div>
     </section>
 
-    <section class="feature-strip" aria-label="Возможности кампании">
-      <div class="feature"><strong>6</strong><span>сюжетных актов и уникальных боссов</span></div>
-      <div class="feature"><strong>7</strong><span>активных способностей с кулдаунами</span></div>
-      <div class="feature"><strong>18</strong><span>камней лора, раскрывающих мир</span></div>
-      <div class="feature"><strong>∞</strong><span>циклов New Game+ с усилением мира</span></div>
-    </section>
-
     <footer>
-      <span>Arbuz Souls · браузерная игра на Three.js</span>
-      <span>Запуск локально: <code>npm install && npm start</code></span>
+      <span>Arbuz Souls</span>
+      <span><code>npm install && npm start</code></span>
     </footer>
   </main>
 
   <script type="module">
-    const ACTS = ['Зелёные холмы', 'Крысиные подземелья', 'Вороньи скалы', 'Токсичная свалка', 'Военная база', 'Кухня ада'];
+    const ACTS = ['Зелёные холмы', 'Подземелья крыс', 'Вороньи скалы', 'Токсичная свалка', 'Военная база', 'Кухня ада'];
     const content = document.getElementById('save-content');
     try {
       const save = JSON.parse(localStorage.getItem('arbuz_souls_save') || 'null');
@@ -89,14 +80,14 @@
         const date = save.timestamp ? new Date(save.timestamp).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }) : 'недавно';
         content.innerHTML = `
           <h2>Акт ${act}: ${ACTS[act - 1]}</h2>
-          <p class="save-description">Последнее сохранение: ${date}</p>
+          <p class="save-description">${date}</p>
           <div class="save-stats">
             <div class="stat"><b>${save.player.level || 1}</b><span>уровень</span></div>
-            <div class="stat"><b>${save.player.kills || 0}</b><span>побед</span></div>
+            <div class="stat"><b>${save.player.kills || 0}</b><span>врагов</span></div>
             <div class="stat"><b>${save.player.seeds || 0}</b><span>семечек</span></div>
-            <div class="stat"><b>${duration}</b><span>в игре</span></div>
+            <div class="stat"><b>${duration}</b><span>в пути</span></div>
           </div>
-          <a class="button button-primary" href="/game">Продолжить кампанию →</a>`;
+          <a class="button button-primary" href="/game">Продолжить →</a>`;
       }
     } catch {
       localStorage.removeItem('arbuz_souls_save');
