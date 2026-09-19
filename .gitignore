@@ -1,3 +1,6 @@
 node_modules/
-*.bak
-projection-hall/media/
+*.log
+.DS_Store
+coverage/
+playwright-report/
+test-results/

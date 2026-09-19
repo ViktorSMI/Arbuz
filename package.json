@@ -1,10 +1,18 @@
 {
-  "name": "arbuzilla-server",
-  "version": "1.0.0",
-  "description": "Multiplayer server for Arbuzilla",
+  "name": "arbuz-souls",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Arbuz Souls — single-player 3D campaign, arcade mode and local WebSocket co-op relay",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check server.js && node --check js/campaign-core.js && node --check js/save.js && node --check js/skills.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "playwright": "^1.58.2",
