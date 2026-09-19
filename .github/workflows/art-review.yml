@@ -11,7 +11,7 @@ jobs:
   review:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,6 +33,7 @@ jobs:
           python .art-polish.py
           python .art-polish-2.py
           python .art-polish-3.py
+          python .art-polish-4.py
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run check && npm test && npm run build
