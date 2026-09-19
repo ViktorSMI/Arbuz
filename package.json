@@ -1,21 +1,26 @@
 {
   "name": "arbuz-souls",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "type": "module",
-  "description": "Arbuz Souls — single-player 3D campaign, arcade mode and local WebSocket co-op relay",
+  "description": "Standalone browser game with an optional WebSocket relay",
   "main": "server.js",
   "scripts": {
+    "build": "node scripts/build-local.mjs",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check server.js && node --check js/campaign-core.js && node --check js/save.js && node --check js/skills.js"
+    "check": "node --check server.js && node --check js/bootstrap.js && node --check js/local-entry.js && node --check scripts/build-local.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "playwright": "^1.58.2",
+    "three": "0.170.0",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9",
+    "playwright": "^1.58.2"
   }
 }

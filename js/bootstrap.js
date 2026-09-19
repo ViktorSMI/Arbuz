@@ -17,7 +17,6 @@ async function loadInterface() {
 try {
   await loadInterface();
   await import('./main.js');
-  await import('./campaign.js');
 } catch (error) {
   console.error('Arbuz Souls failed to boot:', error);
   if (loadingScreen) {
@@ -25,11 +24,10 @@ try {
       <div style="max-width:620px;padding:28px;text-align:center">
         <div style="font-size:64px">🥀</div>
         <h1 style="margin:12px 0 8px">Мир не пророс</h1>
-        <p style="color:#aab6ad;line-height:1.6">Не удалось загрузить игру. Запускайте проект через <code>npm start</code>, а не открывайте HTML-файл напрямую.</p>
+        <p style="color:#aab6ad;line-height:1.6">Не удалось загрузить файлы игры. Проверьте, что репозиторий скачан полностью, либо откройте автономную сборку через <code>index3d.html</code>.</p>
         <pre style="white-space:pre-wrap;color:#ff9da5;font-size:12px">${String(error?.message ?? error)}</pre>
       </div>`;
   }
-  throw error;
 }
 
 requestAnimationFrame(() => {

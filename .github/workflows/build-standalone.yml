@@ -1,0 +1,62 @@
+name: Build standalone browser game
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'js/**'
+      - 'ui/**'
+      - 'scripts/build-local.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'index3d.html'
+      - '.github/workflows/build-standalone.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: standalone-browser-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install build dependencies
+        run: npm install
+
+      - name: Check sources
+        run: npm run check
+
+      - name: Build standalone browser bundle
+        run: npm run build
+
+      - name: Validate generated bundle
+        run: |
+          node --check js/game.bundle.js
+          git diff --check
+          test -s js/game.bundle.js
+
+      - name: Commit generated browser build
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add js/game.bundle.js package-lock.json
+          if git diff --cached --quiet; then
+            echo "Generated build is already current"
+          else
+            git commit -m "build: refresh standalone browser game"
+            git push
+          fi
