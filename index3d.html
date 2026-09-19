@@ -1,227 +1,29 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Arbuz Souls — Dark Souls of Watermelons</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#000;overflow:hidden;font-family:'Segoe UI',Arial,sans-serif;cursor:none}
-canvas{display:block}
-#blocker{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:100;flex-direction:column}
-#blocker h1{font-size:3.5rem;color:#4caf50;text-shadow:0 0 30px #4caf5066;margin-bottom:8px}
-#blocker h2{font-size:1.1rem;color:#ef5350;margin-bottom:30px;font-weight:normal;letter-spacing:2px}
-#blocker button{padding:16px 50px;font-size:1.2rem;font-weight:bold;border:none;border-radius:10px;cursor:pointer;color:#fff;letter-spacing:1px;background:linear-gradient(135deg,#4caf50,#2e7d32);transition:transform .15s}
-#blocker button:hover{transform:scale(1.07)}
-#blocker .sub{color:#999;font-size:.85rem;margin-top:14px}
-#hud{position:fixed;top:0;left:0;width:100%;pointer-events:none;z-index:10;padding:16px}
-.bar-wrap{width:280px;height:18px;background:#1a1a1a;border-radius:9px;border:2px solid #333;margin-bottom:6px;overflow:hidden;position:relative}
-.bar-fill{height:100%;border-radius:7px;transition:width .2s}
-.bar-label{position:absolute;top:0;left:8px;line-height:18px;font-size:11px;color:#fff;font-weight:bold;text-shadow:0 1px 2px #000}
-#hp-bar .bar-fill{background:linear-gradient(90deg,#c62828,#ef5350)}
-#stam-bar .bar-fill{background:linear-gradient(90deg,#1b5e20,#66bb6a)}
-#crosshair{position:fixed;top:50%;left:50%;width:20px;height:20px;margin:-10px 0 0 -10px;z-index:11;pointer-events:none}
-#crosshair::before,#crosshair::after{content:'';position:absolute;background:#fff8}
-#crosshair::before{width:2px;height:20px;left:9px;top:0}
-#crosshair::after{width:20px;height:2px;left:0;top:9px}
-#lock-info{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#aaa;font-size:1.2rem;z-index:100;pointer-events:none;display:none;text-align:center;text-shadow:0 1px 4px #000}
-#enemy-hp{position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:10;pointer-events:none;display:none;text-align:center}
-#enemy-hp .bar-wrap{width:360px;margin:0 auto}
-#enemy-hp .name{color:#fff;font-size:14px;margin-bottom:4px;text-shadow:0 1px 4px #000}
-#death-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:100}
-#death-screen h1{font-size:4rem;color:#c62828;text-shadow:0 0 40px #c6282866;margin-bottom:20px}
-#death-screen button{padding:14px 40px;font-size:1.1rem;font-weight:bold;border:none;border-radius:10px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#4caf50,#2e7d32)}
-#minimap{position:fixed;bottom:16px;right:16px;width:160px;height:160px;border-radius:50%;border:2px solid #4caf50;overflow:hidden;z-index:10;pointer-events:none;background:#111a}
-#xp-bar{position:fixed;top:52px;left:16px;z-index:10;pointer-events:none}
-#xp-bar .bar-wrap{width:200px;height:12px}
-#xp-bar .bar-fill{background:linear-gradient(90deg,#fdd835,#ff8f00)}
-#xp-bar .bar-label{font-size:9px;line-height:12px}
-#level-display{position:fixed;top:68px;left:16px;color:#fdd835;font-size:12px;font-weight:bold;z-index:10;pointer-events:none;text-shadow:0 1px 3px #000}
-#kill-counter{position:fixed;top:84px;left:16px;color:#ef5350;font-size:12px;z-index:10;pointer-events:none;text-shadow:0 1px 3px #000}
-#seeds-counter{position:fixed;top:100px;left:16px;color:#fdd835;font-size:12px;font-weight:bold;z-index:10;pointer-events:none;text-shadow:0 1px 3px #000}
-#compass{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:10;pointer-events:none;color:#fff;font-size:13px;text-shadow:0 1px 4px #000;background:rgba(0,0,0,.4);padding:4px 16px;border-radius:20px}
-#upgrade-panel{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:100;flex-direction:column}
-#upgrade-panel h2{color:#fdd835;font-size:2rem;margin-bottom:20px}
-#upgrade-panel .upgr-grid{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;max-width:500px}
-#upgrade-panel .upgr-btn{padding:14px 20px;font-size:.95rem;border:none;border-radius:10px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#4caf50,#2e7d32);min-width:140px;transition:transform .15s}
-#upgrade-panel .upgr-btn:hover{transform:scale(1.05)}
-#upgrade-panel .upgr-btn:disabled{opacity:.4;cursor:default;transform:none}
-#boss-hp{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:10;pointer-events:none;display:none;text-align:center}
-#boss-hp .bar-wrap{width:500px;height:22px;margin:0 auto}
-#boss-hp .bar-fill{background:linear-gradient(90deg,#b71c1c,#ff1744)}
-#boss-hp .name{color:#ff1744;font-size:18px;font-weight:bold;margin-bottom:6px;text-shadow:0 0 10px #ff174466}
-#portal-prompt{position:fixed;bottom:200px;left:50%;transform:translateX(-50%);color:#4caf50;font-size:1.4rem;font-weight:bold;z-index:10;pointer-events:none;display:none;text-shadow:0 0 10px #4caf5066;animation:pulse-prompt 1.5s ease-in-out infinite}
-@keyframes pulse-prompt{0%,100%{opacity:1}50%{opacity:.5}}
-#lock-reticle{position:fixed;width:48px;height:48px;margin:-24px 0 0 -24px;z-index:11;pointer-events:none;display:none;border:2px solid #ff9800;border-radius:50%;box-shadow:0 0 12px #ff980066,inset 0 0 8px #ff980033;animation:lock-pulse 1s ease-in-out infinite}
-#lock-reticle::before,#lock-reticle::after{content:'';position:absolute;background:#ff9800}
-#lock-reticle::before{width:8px;height:2px;left:-10px;top:22px}
-#lock-reticle::after{width:8px;height:2px;right:-10px;top:22px}
-@keyframes lock-pulse{0%,100%{box-shadow:0 0 12px #ff980066,inset 0 0 8px #ff980033}50%{box-shadow:0 0 20px #ff9800aa,inset 0 0 12px #ff980055}}
-#mobile-controls{display:none;position:fixed;z-index:50;bottom:0;left:0;width:100%;height:100%;pointer-events:none}
-.touch-btn{pointer-events:auto;position:absolute;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fffa;user-select:none;-webkit-user-select:none;touch-action:none}
-.touch-btn:active{background:rgba(255,255,255,.35)}
-#touch-joystick{position:absolute;bottom:30px;left:30px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.15);pointer-events:auto;touch-action:none}
-#touch-stick{position:absolute;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,.3);border:2px solid rgba(255,255,255,.35);left:40px;top:40px;pointer-events:none}
-#touch-attack{bottom:50px;right:30px}
-#touch-dodge{bottom:50px;right:110px}
-#touch-jump{bottom:130px;right:30px}
-#touch-lock{bottom:130px;right:110px}
-#touch-sprint{bottom:210px;right:30px}
-@media(max-width:900px),(pointer:coarse){#mobile-controls{display:block}#crosshair{display:none}.bar-wrap{width:160px;height:14px}.bar-label{font-size:9px;line-height:14px}#compass{font-size:11px;padding:3px 10px}#minimap{width:100px;height:100px;bottom:10px;right:10px}#boss-hp .bar-wrap{width:280px;height:16px}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#050906">
+  <title>Arbuz Souls — кампания</title>
+  <meta name="description" content="Arbuz Souls — полноценная 3D-кампания с шестью актами и боссами.">
+  <link rel="stylesheet" href="css/game.css">
 </head>
-<body>
-<div id="blocker">
-  <h1>🍉 ARBUZ SOULS</h1>
-  <h2>Dark Souls of Watermelons</h2>
-  <button id="btn-play">Начать Завоевание</button>
-  <button id="btn-continue" style="display:none;margin-top:10px;padding:16px 50px;font-size:1.2rem;font-weight:bold;border:none;border-radius:10px;cursor:pointer;color:#fff;letter-spacing:1px;background:linear-gradient(135deg,#ff8f00,#e65100);transition:transform .15s">Продолжить</button>
-  <div class="sub">WASD — движение. Мышь — камера. Shift — уворот. ЛКМ — удар. ПКМ — блок. Q/F/C — скиллы. Tab — инвентарь. ESC — настройки.</div>
-</div>
-<div id="hud">
-  <div id="hp-bar" class="bar-wrap"><div class="bar-fill" style="width:100%"></div><div class="bar-label">HP</div></div>
-  <div id="stam-bar" class="bar-wrap"><div class="bar-fill" style="width:100%"></div><div class="bar-label">STAMINA</div></div>
-</div>
-<div id="crosshair"></div>
-<div id="lock-info">Кликните для продолжения</div>
-<div id="enemy-hp"><div class="name"></div><div class="bar-wrap"><div class="bar-fill" style="width:100%;background:linear-gradient(90deg,#c62828,#ef5350)"></div></div></div>
-<div id="death-screen"><h1>ВЫ ПОГИБЛИ</h1><button id="btn-respawn">Возродиться</button></div>
-<canvas id="minimap"></canvas>
-
-<div id="xp-bar"><div class="bar-wrap"><div class="bar-fill" style="width:0%"></div><div class="bar-label">XP</div></div></div>
-<div id="level-display">Ур. 1</div>
-<div id="kill-counter">Убийств: 0 / 40</div>
-<div id="seeds-counter">🌰 Семечки: 0</div>
-<div id="compass">🍉 Исследуй мир</div>
-
-<div id="upgrade-panel">
-  <h2>🍉 УЛУЧШЕНИЕ</h2>
-  <div class="upgr-grid">
-    <button class="upgr-btn" data-stat="hp">❤️ Здоровье</button>
-    <button class="upgr-btn" data-stat="damage">⚔️ Урон</button>
-    <button class="upgr-btn" data-stat="stamina">💪 Стамина</button>
-    <button class="upgr-btn" data-stat="speed">👟 Скорость</button>
-  </div>
-</div>
-
-<div id="boss-hp"><div class="name"></div><div class="bar-wrap"><div class="bar-fill" style="width:100%"></div></div></div>
-
-<div id="portal-prompt">[E] Перейти в следующую локацию</div>
-<div id="npc-prompt" style="position:fixed;bottom:240px;left:50%;transform:translateX(-50%);color:#fdd835;font-size:1.2rem;font-weight:bold;z-index:10;pointer-events:none;display:none;text-shadow:0 0 8px #fdd83566">[E] Поговорить</div>
-<div id="npc-dialogue" style="position:fixed;bottom:100px;left:50%;transform:translateX(-50%);max-width:500px;width:90%;background:rgba(0,0,0,.85);border:2px solid #fdd835;border-radius:12px;padding:16px 20px;z-index:100;display:none;color:#fff;font-size:1rem;line-height:1.5;text-align:center">
-  <div id="npc-dialogue-name" style="color:#fdd835;font-weight:bold;font-size:1.1rem;margin-bottom:8px"></div>
-  <div id="npc-dialogue-text" style="margin-bottom:12px"></div>
-  <div id="npc-reward" style="display:none;color:#4caf50;font-size:1.1rem;font-weight:bold;margin:8px 0;padding:8px 12px;background:rgba(76,175,80,.15);border:1px solid #4caf5066;border-radius:8px;animation:reward-glow 1s ease-in-out infinite"></div>
-  <div style="color:#999;font-size:.8rem">[E] Продолжить</div>
-</div>
-<style>@keyframes reward-glow{0%,100%{box-shadow:0 0 8px #4caf5044}50%{box-shadow:0 0 20px #4caf5088}}</style>
-<div id="lock-reticle"></div>
-
-<div id="lore-popup" style="position:fixed;top:15%;left:50%;transform:translateX(-50%);max-width:550px;width:90%;background:rgba(0,0,0,.92);border:2px solid #fdd835;border-radius:14px;padding:20px 24px;z-index:150;display:none;color:#fff;font-size:.95rem;line-height:1.7;text-align:center">
-  <div id="lore-title" style="color:#fdd835;font-weight:bold;font-size:1.3rem;margin-bottom:10px">📜 Название</div>
-  <div id="lore-text" style="margin-bottom:14px;color:#ddd"></div>
-  <div id="lore-count" style="color:#888;font-size:.8rem;margin-bottom:8px">Найдено: 0/18</div>
-  <div style="color:#666;font-size:.75rem">[E] Закрыть</div>
-</div>
-
-<div id="dialogue-panel" style="position:fixed;bottom:60px;left:50%;transform:translateX(-50%);max-width:600px;width:92%;background:rgba(0,0,0,.92);border:2px solid #4caf50;border-radius:14px;padding:18px 22px;z-index:150;display:none;color:#fff">
-  <div id="dlg-speaker" style="color:#4caf50;font-weight:bold;font-size:1.1rem;margin-bottom:8px"></div>
-  <div id="dlg-text" style="margin-bottom:14px;line-height:1.6;font-size:.95rem"></div>
-  <div id="dlg-choices" style="display:flex;flex-direction:column;gap:6px"></div>
-</div>
-
-<div id="caravan-prompt" style="position:fixed;bottom:200px;left:50%;transform:translateX(-50%);color:#ff8f00;font-size:1.1rem;font-weight:bold;z-index:10;pointer-events:none;display:none;text-shadow:0 0 8px #ff8f0066;text-align:center">[E] Торговать &nbsp; [X] Ограбить</div>
-
-<div id="shop-panel" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;z-index:150;flex-direction:column">
-  <h2 style="color:#ff8f00;font-size:1.8rem;margin-bottom:20px">🛒 Торговец</h2>
-  <div id="shop-items" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;min-width:300px"></div>
-  <div id="shop-seeds" style="color:#fdd835;margin-top:12px;font-size:1rem">🌰 Семечки: 0</div>
-  <button id="btn-shop-close" style="margin-top:16px;padding:12px 40px;font-size:1rem;border:none;border-radius:10px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#ff8f00,#e65100)">Закрыть [ESC]</button>
-</div>
-
-<div id="companion-status" style="position:fixed;top:120px;left:16px;z-index:10;pointer-events:none;color:#fff;font-size:11px;text-shadow:0 1px 3px #000"></div>
-
-<div id="reputation-display" style="position:fixed;top:116px;left:16px;z-index:10;pointer-events:none;color:#aaa;font-size:11px;text-shadow:0 1px 3px #000"></div>
-
-<div id="screen-flash" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;opacity:0;pointer-events:none;z-index:200;transition:opacity 0.3s"></div>
-<div id="boss-defeated-text" style="position:fixed;top:35%;left:50%;transform:translate(-50%,-50%);font-size:4rem;color:#fdd835;text-shadow:0 0 40px #fdd83566,0 0 80px #ff8f0044;z-index:201;display:none;font-weight:bold;letter-spacing:4px;text-align:center">БОСС ПОВЕРЖЕН</div>
-<div id="biome-name" style="position:fixed;top:20%;left:50%;transform:translate(-50%,-50%);font-size:2.5rem;color:#fff;text-shadow:0 0 30px #00000088;z-index:201;display:none;font-weight:bold;letter-spacing:3px;opacity:0;transition:opacity 1s"></div>
-
-<div id="skill-bar" style="position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:10;pointer-events:none">
-  <div class="skill-slot" data-skill="0" style="width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #666;display:flex;align-items:center;justify-content:center;position:relative;font-size:22px"><span class="skill-icon">Q</span><div class="skill-cd-overlay" style="position:absolute;bottom:0;left:0;width:100%;background:rgba(0,0,0,.7);border-radius:0 0 6px 6px;height:0%;transition:height 0.1s"></div><div class="skill-key" style="position:absolute;bottom:-14px;font-size:9px;color:#aaa">Q</div></div>
-  <div class="skill-slot" data-skill="1" style="width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #666;display:flex;align-items:center;justify-content:center;position:relative;font-size:22px"><span class="skill-icon">F</span><div class="skill-cd-overlay" style="position:absolute;bottom:0;left:0;width:100%;background:rgba(0,0,0,.7);border-radius:0 0 6px 6px;height:0%"></div><div class="skill-key" style="position:absolute;bottom:-14px;font-size:9px;color:#aaa">F</div></div>
-  <div class="skill-slot" data-skill="2" style="width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #666;display:flex;align-items:center;justify-content:center;position:relative;font-size:22px"><span class="skill-icon">C</span><div class="skill-cd-overlay" style="position:absolute;bottom:0;left:0;width:100%;background:rgba(0,0,0,.7);border-radius:0 0 6px 6px;height:0%"></div><div class="skill-key" style="position:absolute;bottom:-14px;font-size:9px;color:#aaa">C</div></div>
-  <div class="skill-slot" data-skill="3" style="width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #666;display:flex;align-items:center;justify-content:center;position:relative;font-size:22px"><span class="skill-icon">1</span><div class="skill-cd-overlay" style="position:absolute;bottom:0;left:0;width:100%;background:rgba(0,0,0,.7);border-radius:0 0 6px 6px;height:0%"></div><div class="skill-key" style="position:absolute;bottom:-14px;font-size:9px;color:#aaa">1</div></div>
-  <div class="skill-slot" data-skill="4" style="width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #666;display:flex;align-items:center;justify-content:center;position:relative;font-size:22px"><span class="skill-icon">2</span><div class="skill-cd-overlay" style="position:absolute;bottom:0;left:0;width:100%;background:rgba(0,0,0,.7);border-radius:0 0 6px 6px;height:0%"></div><div class="skill-key" style="position:absolute;bottom:-14px;font-size:9px;color:#aaa">2</div></div>
-  <div class="skill-slot" data-skill="5" style="width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #666;display:flex;align-items:center;justify-content:center;position:relative;font-size:22px"><span class="skill-icon">3</span><div class="skill-cd-overlay" style="position:absolute;bottom:0;left:0;width:100%;background:rgba(0,0,0,.7);border-radius:0 0 6px 6px;height:0%"></div><div class="skill-key" style="position:absolute;bottom:-14px;font-size:9px;color:#aaa">3</div></div>
-  <div class="skill-slot" data-skill="6" style="width:50px;height:50px;border-radius:8px;background:rgba(0,0,0,.6);border:2px solid #666;display:flex;align-items:center;justify-content:center;position:relative;font-size:22px"><span class="skill-icon">4</span><div class="skill-cd-overlay" style="position:absolute;bottom:0;left:0;width:100%;background:rgba(0,0,0,.7);border-radius:0 0 6px 6px;height:0%"></div><div class="skill-key" style="position:absolute;bottom:-14px;font-size:9px;color:#aaa">4</div></div>
-</div>
-
-<div id="equip-display" style="position:fixed;bottom:16px;left:16px;z-index:10;pointer-events:none;color:#fff;font-size:12px;text-shadow:0 1px 3px #000"></div>
-<div id="block-indicator" style="position:fixed;top:50%;left:50%;margin:-35px 0 0 25px;z-index:11;pointer-events:none;display:none;font-size:28px">🛡️</div>
-<div id="parry-flash" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:120px;height:120px;border-radius:50%;border:3px solid #fdd835;box-shadow:0 0 30px #fdd835;z-index:11;pointer-events:none;display:none;opacity:0"></div>
-<div id="time-indicator" style="position:fixed;top:10px;right:190px;z-index:10;pointer-events:none;font-size:18px"></div>
-
-<div id="settings-panel" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;z-index:150;flex-direction:column">
-  <h2 style="color:#4caf50;font-size:2rem;margin-bottom:30px">Настройки</h2>
-  <div style="display:flex;flex-direction:column;gap:16px;width:300px">
-    <label style="color:#fff;display:flex;justify-content:space-between;align-items:center">Громкость музыки <input type="range" id="set-volume" min="0" max="100" value="18" style="width:150px"></label>
-    <label style="color:#fff;display:flex;justify-content:space-between;align-items:center">Громкость SFX <input type="range" id="set-sfx" min="0" max="100" value="25" style="width:150px"></label>
-    <label style="color:#fff;display:flex;justify-content:space-between;align-items:center">Чувствительность <input type="range" id="set-sens" min="1" max="10" value="2" style="width:150px"></label>
-    <label style="color:#fff;display:flex;justify-content:space-between;align-items:center">Bloom <input type="checkbox" id="set-bloom" checked></label>
-  </div>
-  <button id="btn-settings-close" style="margin-top:30px;padding:12px 40px;font-size:1rem;border:none;border-radius:10px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#4caf50,#2e7d32)">Закрыть</button>
-</div>
-
-<div id="inventory-panel" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;z-index:150;flex-direction:column">
-  <h2 style="color:#fdd835;font-size:2rem;margin-bottom:20px">Инвентарь</h2>
-  <div style="display:flex;gap:30px">
-    <div id="inv-equipped" style="color:#fff;min-width:200px">
-      <h3 style="color:#4caf50;margin-bottom:10px">Экипировано</h3>
-      <div id="inv-sword" style="padding:8px;border:1px solid #4caf50;border-radius:8px;margin-bottom:8px;cursor:pointer">Меч: Обычный</div>
-      <div id="inv-armor" style="padding:8px;border:1px solid #4caf50;border-radius:8px;cursor:pointer">Броня: Нет</div>
-    </div>
-    <div id="inv-bag" style="color:#fff;min-width:200px">
-      <h3 style="color:#ff8f00;margin-bottom:10px">Рюкзак</h3>
-      <div id="inv-items" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto"></div>
+<body class="ui-open">
+  <div id="loading-screen">
+    <div>
+      <div class="loading-mark">🍉</div>
+      <div class="loading-copy">проращиваем мир</div>
     </div>
   </div>
-  <button id="btn-inv-close" style="margin-top:20px;padding:12px 40px;font-size:1rem;border:none;border-radius:10px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#ff8f00,#e65100)">Закрыть [Tab]</button>
-</div>
-
-<div id="mobile-controls">
-  <div id="touch-joystick"><div id="touch-stick"></div></div>
-  <div class="touch-btn" id="touch-attack">⚔️</div>
-  <div class="touch-btn" id="touch-dodge">🔄</div>
-  <div class="touch-btn" id="touch-jump">⬆️</div>
-  <div class="touch-btn" id="touch-lock">🎯</div>
-  <div class="touch-btn" id="touch-sprint">🏃</div>
-  <div class="touch-btn" id="touch-interact" style="bottom:210px;right:110px">💬</div>
-</div>
-
-<div id="victory-screen" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.95);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:200">
-  <h1 style="font-size:3rem;color:#4caf50;text-shadow:0 0 40px #4caf5066;margin-bottom:10px">🍉 ПОБЕДА!</h1>
-  <h2 style="color:#fdd835;font-size:1.5rem;margin-bottom:30px">Arbuz Souls пройден!</h2>
-  <div style="color:#aaa;font-size:1rem;max-width:500px;text-align:center;line-height:1.8;margin-bottom:30px">
-    Арбузилла отомстил всем врагам и стал легендой.<br>
-    Мир овощей и фруктов снова в безопасности.<br><br>
-    <span style="color:#fdd835">Статистика:</span><br>
-    <span id="victory-kills">Убийств: 0</span><br>
-    <span id="victory-level">Уровень: 1</span><br>
-    <span id="victory-seeds">Семечек собрано: 0</span>
-  </div>
-  <button id="btn-newgame-plus" style="padding:16px 50px;font-size:1.2rem;font-weight:bold;border:none;border-radius:10px;cursor:pointer;color:#fff;letter-spacing:1px;background:linear-gradient(135deg,#ff8f00,#e65100);margin-bottom:10px">New Game+ 💀</button>
-  <button id="btn-victory-menu" style="padding:12px 40px;font-size:1rem;border:none;border-radius:10px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#4caf50,#2e7d32)">В главное меню</button>
-</div>
-
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  <main id="game-root"></main>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
   }
-}
-</script>
-<script type="module" src="js/main.js"></script>
+  </script>
+  <script type="module" src="js/bootstrap.js"></script>
 </body>
 </html>

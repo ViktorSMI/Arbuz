@@ -1,0 +1,79 @@
+  <div id="hud">
+    <div id="hp-bar" class="bar-wrap"><div class="bar-fill"></div><div class="bar-label">HP</div></div>
+    <div id="stam-bar" class="bar-wrap"><div class="bar-fill"></div><div class="bar-label">STAMINA</div></div>
+  </div>
+  <div id="xp-bar"><div class="bar-wrap"><div class="bar-fill" style="width:0%"></div><div class="bar-label">XP</div></div></div>
+  <div id="level-display">Ур. 1</div>
+  <div id="kill-counter">Убийств: 0</div>
+  <div id="seeds-counter">🌰 Семечки: 0</div>
+  <div id="reputation-display">Репутация: 0</div>
+  <div id="companion-status"></div>
+
+  <aside id="mission-card" aria-live="polite">
+    <div class="mission-kicker">Текущая цель</div>
+    <div id="mission-act">Акт I</div>
+    <div id="mission-objective">Начните кампанию</div>
+    <div class="mission-progress"><div id="mission-progress-fill"></div></div>
+    <div id="mission-secondary">J — журнал заданий</div>
+  </aside>
+
+  <div id="compass">🍉 Исследуйте мир</div>
+  <div id="time-indicator">☀️</div>
+  <canvas id="minimap" width="320" height="320" aria-label="Мини-карта"></canvas>
+  <div id="equip-display"></div>
+
+  <div id="crosshair"></div>
+  <div id="lock-reticle"></div>
+  <div id="block-indicator">🛡️</div>
+  <div id="parry-flash"></div>
+
+  <div id="enemy-hp">
+    <div class="name"></div>
+    <div class="bar-wrap"><div class="bar-fill"></div></div>
+  </div>
+  <div id="boss-hp">
+    <div class="name"></div>
+    <div class="bar-wrap"><div class="bar-fill"></div></div>
+  </div>
+
+  <div id="portal-prompt">[E] Перейти в следующий акт</div>
+  <div id="npc-prompt">[E] Поговорить</div>
+  <div id="caravan-prompt">[E] Торговать &nbsp; [X] Ограбить</div>
+  <div id="lock-info">Кликните, чтобы вернуться в игру</div>
+
+  <div id="tutorial-card">
+    <div id="tutorial-title">Обучение</div>
+    <div id="tutorial-text">Используйте WASD для движения</div>
+    <div id="tutorial-progress">1 / 6</div>
+  </div>
+
+  <div id="skill-bar" aria-label="Способности">
+    <div class="skill-slot" data-skill="0"><span class="skill-icon">🔒</span><div class="skill-cd-overlay"></div><div class="skill-key">Q</div><div class="skill-name">Рывок</div></div>
+    <div class="skill-slot" data-skill="1"><span class="skill-icon">🔒</span><div class="skill-cd-overlay"></div><div class="skill-key">F</div><div class="skill-name">Удар</div></div>
+    <div class="skill-slot" data-skill="2"><span class="skill-icon">🔒</span><div class="skill-cd-overlay"></div><div class="skill-key">C</div><div class="skill-name">Семя</div></div>
+    <div class="skill-slot" data-skill="3"><span class="skill-icon">🔒</span><div class="skill-cd-overlay"></div><div class="skill-key">1</div><div class="skill-name">Лоза</div></div>
+    <div class="skill-slot" data-skill="4"><span class="skill-icon">🔒</span><div class="skill-cd-overlay"></div><div class="skill-key">2</div><div class="skill-name">Щит</div></div>
+    <div class="skill-slot" data-skill="5"><span class="skill-icon">🔒</span><div class="skill-cd-overlay"></div><div class="skill-key">3</div><div class="skill-name">Дождь</div></div>
+    <div class="skill-slot" data-skill="6"><span class="skill-icon">🔒</span><div class="skill-cd-overlay"></div><div class="skill-key">4</div><div class="skill-name">Корка</div></div>
+  </div>
+
+  <div id="npc-dialogue">
+    <div id="npc-dialogue-name"></div>
+    <div id="npc-dialogue-text"></div>
+    <div id="npc-reward"></div>
+    <div class="npc-continue">[E] продолжить</div>
+  </div>
+
+  <section id="dialogue-panel" aria-live="polite">
+    <div id="dlg-speaker"></div>
+    <div id="dlg-text"></div>
+    <div id="dlg-choices"></div>
+    <div id="dlg-result"></div>
+  </section>
+
+  <section id="lore-popup">
+    <div id="lore-title">📜 Камень памяти</div>
+    <div id="lore-text"></div>
+    <div id="lore-count">Найдено: 0 / 18</div>
+    <div class="npc-continue">[E] закрыть</div>
+  </section>
