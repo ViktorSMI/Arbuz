@@ -1,0 +1,56 @@
+name: Validate physical cape
+
+on:
+  push:
+    branches: [work/cape-physics]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cape-physics-review
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Check, test and build
+        run: npm run check && npm test && npm run build
+      - name: Validate standalone bundle
+        run: |
+          node --check js/game.bundle.js
+          test -s js/game.bundle.js
+          git diff --check
+      - name: Verify local browser launch
+        run: npm run smoke:local
+      - name: Verify gameplay and art
+        run: npm run smoke:art
+      - name: Upload review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cape-physics-review
+          path: |
+            test-results/
+            js/game.bundle.js
+          retention-days: 7
+      - name: Commit validated standalone bundle
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add js/game.bundle.js package-lock.json
+          if git diff --cached --quiet; then
+            echo "Standalone bundle is current"
+          else
+            git commit -m "build: refresh physical cape bundle"
+            git push origin HEAD:work/cape-physics
+          fi

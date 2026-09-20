@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { simulateCape } from './cloth-physics.js';
 
 /** Exact critically-damped spring: stable even after a slow browser frame. */
 export function spring(state, target, dt, frequency = 12) {
@@ -32,6 +33,10 @@ function memory(root) {
   return memories.get(root);
 }
 
+/**
+ * Legacy deterministic deformation retained for non-simulated previews and tests.
+ * Runtime hero cloth uses the Verlet solver in cloth-physics.js.
+ */
 export function deformCloth(mesh, time, motion = 0, turn = 0) {
   const rest = mesh.userData.clothRest;
   if (!rest) return;
@@ -49,19 +54,33 @@ export function deformCloth(mesh, time, motion = 0, turn = 0) {
 
 export function secondaryMotion(root, dt, state, speed = 0, time = 0) {
   const j = root.userData.joints, m = memory(root);
-  const active = ['walk', 'run', 'swim'].includes(state);
+  const active = ['walk', 'run', 'swim', 'dodge'].includes(state);
   const yawDelta = Math.atan2(Math.sin(root.rotation.y - m.yaw), Math.cos(root.rotation.y - m.yaw));
   const turn = dt > 0 ? THREE.MathUtils.clamp(yawDelta / dt, -3, 3) : 0;
   m.yaw = root.rotation.y;
   const tilt = spring(m.turn, turn, dt, 7);
-  const flow = spring(m.cape, active ? speed : 0, dt, 6);
+  const targetFlow = active ? Math.max(speed, state === 'dodge' ? 1.25 : 0) : 0;
+  const flow = spring(m.cape, targetFlow, dt, 6);
   if (j.cape) {
-    j.cape.rotation.x = -.05 + flow * .16 + Math.sin(time * 2.4) * .018;
-    j.cape.rotation.z = -tilt * .08;
+    // The old anchor lived inside the rear ellipsoid. Keep the collar outside
+    // the rind and let the particles provide the trailing motion.
+    if (!j.cape.userData.physicalAnchor) {
+      j.cape.userData.physicalAnchor = {
+        x: j.cape.position.x,
+        y: Math.max(.43, j.cape.position.y),
+        z: Math.min(-.76, j.cape.position.z),
+      };
+    }
+    const anchor = j.cape.userData.physicalAnchor;
+    j.cape.position.set(anchor.x, anchor.y, anchor.z);
+    j.cape.rotation.x = -.035 + Math.sin(time * 2.1) * .006;
+    j.cape.rotation.z = -tilt * .018;
   }
   if (j.stem) { j.stem.rotation.z = Math.sin(time * 2.7) * .035 - tilt * .06; j.stem.rotation.x = -flow * .06; }
   if (j.tail) j.tail.rotation.y = Math.sin(time * 2.8) * .19 - tilt * .08;
-  for (const mesh of root.userData.cloth || []) deformCloth(mesh, time, flow, tilt);
+  for (const mesh of root.userData.cloth || []) {
+    simulateCape(mesh, root, dt, time, { motion: flow, turn: tilt, rolling: state === 'dodge' });
+  }
   for (const [i, eye] of (root.userData.eyes || []).entries()) {
     const phase = (time + i * .015) % 4.7;
     const blink = phase < .13 ? Math.sin(phase / .13 * Math.PI) : 0;
