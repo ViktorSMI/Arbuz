@@ -64,3 +64,22 @@ test('terrain uses warped noise, arena shaping and triplanar material projection
   for (const token of ['valueNoise','fbm','warpX','roadWeight','arenaDistance']) assert(terrain.includes(token));
   for (const token of ['sampleX','sampleY','sampleZ','vGroundNormal','orchard-terrain-3-triplanar']) assert(landscape.includes(token));
 });
+
+
+test('GLB PBR colours remain normalized and distinct', () => {
+  const colours = [];
+  for (const file of Object.keys(required)) {
+    const { json } = parseGlb(`assets/models/${file}`);
+    for (const entry of json.materials || []) {
+      const colour = entry.pbrMetallicRoughness?.baseColorFactor;
+      if (!colour) continue;
+      assert(colour.every(value => Number.isFinite(value) && value >= 0 && value <= 1), `${file} has invalid PBR colour`);
+      colours.push(colour.map(value => value.toFixed(3)).join(','));
+    }
+  }
+  assert(new Set(colours).size >= 14, 'authored palette collapsed during GLB export');
+  const hero = parseGlb('assets/models/hero_arbuzilla.glb').json;
+  const rind = hero.materials.find(entry => entry.name === 'rind')?.pbrMetallicRoughness?.baseColorFactor;
+  assert(rind && rind[1] > rind[0] && rind[1] > rind[2], 'hero rind lost its green material');
+  assert(rind.slice(0, 3).some(value => value < .8), 'hero rind was clamped to white');
+});

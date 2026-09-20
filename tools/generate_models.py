@@ -14,7 +14,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 
 def mat(name: str, color: str, roughness: float = .75, metallic: float = 0.0, emissive: str | None = None, double: bool = False):
-    rgb = trimesh.visual.color.hex_to_rgba(color)
+    rgb = trimesh.visual.color.hex_to_rgba(color) / 255.0
     ef = trimesh.visual.color.hex_to_rgba(emissive)[:3] / 255.0 if emissive else None
     return PBRMaterial(
         name=name,
