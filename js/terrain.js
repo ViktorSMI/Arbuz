@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { WORLD_SIZE, TERRAIN_SEG } from './constants.js';
 import { surface } from './art/materials.js';
 import { scene } from './scene.js';
+import { terrainShader } from './art/landscape.js';
 
 export function computeHeight(x, z) {
   let h = 0;
@@ -54,6 +55,7 @@ export const terrainMat=new THREE.MeshStandardMaterial({
   vertexColors:true,roughness:1,normalScale:new THREE.Vector2(.38,.38),
   map:maps.map.clone(),normalMap:maps.normalMap.clone(),roughnessMap:maps.roughnessMap.clone(),
 });
+terrainShader(terrainMat);
 for(const tex of [terrainMat.map,terrainMat.normalMap,terrainMat.roughnessMap]){tex.repeat.set(85,85);tex.needsUpdate=true;}
 const terrain=new THREE.Mesh(terrainGeo,terrainMat);terrain.name='orchard-terrain';terrain.receiveShadow=true;scene.add(terrain);
 

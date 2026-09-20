@@ -44,7 +44,7 @@ for(let i=0;i<6;i++)test(`guardian ${i+1} preserves simulation scale and has art
 });
 test('PBR maps are cached and are generated locally',()=>{
   const before=materialStats().surfaces; const a=surface('rind'),b=surface('rind');
-  assert.equal(a,b); assert.equal(a.map.image.width,256); assert.equal(a.normalMap.image.data.length,256*256*4);
+  assert.equal(a,b); assert.equal(a.map.image.width,512); assert.equal(a.normalMap.image.data.length,512*512*4);
   assert.equal(materialStats().surfaces,before);assert.equal(LAND_STYLES.length,6);
 });
 test('seeded scenery sampling is reproducible',()=>{const a=randomSeed(3),b=randomSeed(3);for(let i=0;i<100;i++)assert.equal(a(),b());});
