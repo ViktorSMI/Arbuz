@@ -1,0 +1,59 @@
+name: Validate procedural locomotion
+
+on:
+  push:
+    branches: [work/procedural-locomotion]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: procedural-locomotion-review
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Syntax, unit tests and standalone build
+        run: npm run check && npm test && npm run build
+      - name: Validate generated bundle
+        run: |
+          node --check js/game.bundle.js
+          test -s js/game.bundle.js
+          git diff --check
+      - name: Verify direct file launch
+        run: npm run smoke:local
+      - name: Verify movement, dodge and offline gameplay
+        run: npm run smoke:art
+      - name: Archive validated build
+        if: always()
+        run: |
+          mkdir -p /tmp/procedural-locomotion-review
+          tar --exclude=.git --exclude=node_modules --exclude=test-results -czf /tmp/procedural-locomotion-review/browser-source.tar.gz .
+          cp -R test-results /tmp/procedural-locomotion-review/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procedural-locomotion-review
+          path: /tmp/procedural-locomotion-review/
+          retention-days: 7
+      - name: Commit validated browser bundle
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add js/game.bundle.js package-lock.json
+          if git diff --cached --quiet; then
+            echo "Generated build is current"
+          else
+            git commit -m "build: refresh procedural locomotion bundle"
+            git push origin HEAD:work/procedural-locomotion
+          fi
