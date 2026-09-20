@@ -6,6 +6,7 @@ export const DEFAULTS = {
   sensitivity: 0.002,
   bloomEnabled: true,
   showFps: false,
+  quality: 'medium',
 };
 
 let cache = null;

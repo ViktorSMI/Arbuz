@@ -1,3 +1,4 @@
+import { landStyle } from './art/palette.js';
 import * as THREE from 'three';
 
 const BIOMES = [
@@ -26,60 +27,21 @@ function getBiome(index) {
 }
 
 function applyBiome(locationIndex, refs) {
-  const biome = getBiome(locationIndex);
-  const { terrainMat, grassMat, leafMats, scene, ambientLight, hemiLight, sunLight, waterMat, skyMat } = refs;
-
-  if (terrainMat) {
-    terrainMat.color.setHex(biome.terrainColor);
-  }
-
-  if (grassMat) {
-    grassMat.color.setHex(biome.grassColor);
-  }
-
-  if (leafMats && Array.isArray(leafMats)) {
-    for (const mat of leafMats) {
-      mat.color.setHex(biome.treeLeafColor);
-    }
-  }
-
+  const style = landStyle(locationIndex);
+  const { terrainMat, grassMat, leafMats, scene, hemiLight, sunLight, waterMat, skyMat } = refs;
+  if (terrainMat) terrainMat.color.set(style.ground).lerp(new THREE.Color('#ffffff'), .65);
+  if (grassMat) grassMat.color.set('#ece5c6');
+  for (const [i, mat] of (leafMats || []).entries()) mat.color.set(style.foliage).lerp(new THREE.Color('#ffffff'), .36 + i * .08);
   if (scene) {
-    const fogCol = new THREE.Color(biome.fogColor);
-    if (scene.fog) {
-      scene.fog.color.copy(fogCol);
-      if (scene.fog.density !== undefined) {
-        scene.fog.density = biome.fogDensity;
-      }
-    }
-    scene.background = fogCol;
+    scene.background = new THREE.Color(style.fog);
+    if (scene.fog) { scene.fog.color.set(style.fog); scene.fog.density = .009; }
   }
-
-  if (ambientLight) {
-    ambientLight.intensity = biome.ambientIntensity;
-  }
-
-  if (sunLight) {
-    sunLight.intensity = biome.sunIntensity;
-  }
-
-  if (waterMat) {
-    waterMat.color.setHex(biome.waterColor);
-  }
-
-  if (skyMat && skyMat.uniforms) {
-    if (skyMat.uniforms.uTop) {
-      skyMat.uniforms.uTop.value = new THREE.Vector3(biome.skyTop[0], biome.skyTop[1], biome.skyTop[2]);
-    }
-    if (skyMat.uniforms.uBot) {
-      skyMat.uniforms.uBot.value = new THREE.Vector3(biome.skyBot[0], biome.skyBot[1], biome.skyBot[2]);
-    }
-    if (skyMat.uniforms.uHor) {
-      skyMat.uniforms.uHor.value = new THREE.Vector3(biome.skyHor[0], biome.skyHor[1], biome.skyHor[2]);
-    }
-  }
-
-  if (hemiLight) {
-    hemiLight.color.setHex(biome.fogColor);
+  if (sunLight) sunLight.color.set(style.light);
+  if (hemiLight) { hemiLight.color.set(style.fog); hemiLight.groundColor.set(style.ground); }
+  if (waterMat) waterMat.color.set(locationIndex === 3 ? '#7b9860' : locationIndex === 5 ? '#a16e45' : '#527e80');
+  // Color-valued uniforms remain Color objects across every transition.
+  if (skyMat?.uniforms) for (const [name, color] of [['uTop', style.sky], ['uHor', style.fog], ['uBot', style.fog]]) {
+    if (skyMat.uniforms[name]) skyMat.uniforms[name].value = new THREE.Color(color);
   }
 }
 

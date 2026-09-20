@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -8,6 +9,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 let composer = null;
 let bloomPass = null;
 let vignettePass = null;
+let fxaaPass = null;
 
 // --- Screen Shake ---
 let shakeIntensity = 0;
@@ -94,6 +96,9 @@ function initPostProcessing(renderer, scene, camera) {
 
   const outputPass = new OutputPass();
   composer.addPass(outputPass);
+  fxaaPass = new ShaderPass(FXAAShader);
+  composer.addPass(fxaaPass);
+  fxaaPass.uniforms.resolution.value.set(1 / composer.readBuffer.width, 1 / composer.readBuffer.height);
 
   return composer;
 }
@@ -101,6 +106,7 @@ function initPostProcessing(renderer, scene, camera) {
 function resizePostProcessing(width, height) {
   if (composer) {
     composer.setSize(width, height);
+    if (fxaaPass) fxaaPass.uniforms.resolution.value.set(1 / composer.readBuffer.width, 1 / composer.readBuffer.height);
   }
   if (bloomPass) {
     bloomPass.resolution.set(width, height);

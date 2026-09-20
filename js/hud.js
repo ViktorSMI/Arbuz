@@ -30,23 +30,23 @@ export function updateHud(lastTarget, targetShowTimer, gameLocation) {
   xpFill.style.width = Math.max(0, player.xp / player.xpToNext * 100) + '%';
   levelDisp.textContent = 'Ур. ' + player.level;
   killCounter.textContent = 'Убийств: ' + player.kills + ' / ' + ENEMY_COUNT;
-  if (seedsEl) seedsEl.textContent = '🌰 Семечки: ' + player.seeds;
+  if (seedsEl) seedsEl.textContent = 'Семечки: ' + player.seeds;
 
   const def = getBossDef(bossState.currentBossIndex);
   if (bossState.bossDefeated) {
-    compassEl.textContent = '🍉 Локация ' + gameLocation;
+    compassEl.textContent = 'Земля ' + gameLocation;
   } else if (bossState.bossActive && bossState.bossObj && bossState.bossObj.alive) {
-    compassEl.textContent = '💀 ' + def.name + ' — БОСС';
+    compassEl.textContent = '' + def.name + ' — БОСС';
   } else {
     const bdx = BOSS_ARENA_POS.x - player.pos.x;
     const bdz = BOSS_ARENA_POS.z - player.pos.z;
     const bDist = Math.floor(Math.sqrt(bdx * bdx + bdz * bdz));
-    compassEl.textContent = '⚔️ Логово ' + def.name + ' — ' + bDist + 'м';
+    compassEl.textContent = 'Логово ' + def.name + ' — ' + bDist + 'м';
   }
 
   if (lastTarget && lastTarget.alive && targetShowTimer > 0) {
     enemyHpEl.style.display = 'block';
-    enemyNameEl.textContent = lastTarget.type.name;
+    enemyNameEl.textContent = lastTarget.type?.name || def.name;
     enemyHpFill.style.width = Math.max(0, lastTarget.hp / lastTarget.maxHp * 100) + '%';
   } else {
     enemyHpEl.style.display = 'none';
@@ -55,7 +55,7 @@ export function updateHud(lastTarget, targetShowTimer, gameLocation) {
   const b = bossState.bossObj;
   if (b && b.alive && bossState.bossActive) {
     bossHpEl.style.display = 'block';
-    bossNameEl.textContent = def.emoji + ' ' + def.name + (b.phase === 2 ? ' — ЯРОСТЬ' : '');
+    bossNameEl.textContent = def.name + (b.phase === 2 ? ' — ЯРОСТЬ' : '');
     bossHpFill.style.width = Math.max(0, b.hp / b.maxHp * 100) + '%';
   } else {
     bossHpEl.style.display = 'none';
@@ -64,13 +64,13 @@ export function updateHud(lastTarget, targetShowTimer, gameLocation) {
 
 export function drawMinimap() {
   const w = 160, h = 160;
-  mctx.fillStyle = '#2e5a1e';
+  mctx.fillStyle = '#24342d';
   mctx.fillRect(0, 0, w, h);
 
   const scale = w / (WORLD_SIZE * 1.1);
   const cx = w / 2, cy = h / 2;
 
-  mctx.fillStyle = '#1a3610';
+  mctx.fillStyle = '#415345';
   for (const t of obstacles) {
     const mx = cx + (t.x - player.pos.x) * scale;
     const mz = cy + (t.z - player.pos.z) * scale;
@@ -85,7 +85,7 @@ export function drawMinimap() {
     const mx = cx + (e.x - player.pos.x) * scale;
     const mz = cy + (e.z - player.pos.z) * scale;
     if (mx < 0 || mx > w || mz < 0 || mz > h) continue;
-    mctx.fillStyle = '#ff1744';
+    mctx.fillStyle = '#c68c72';
     mctx.beginPath();
     mctx.arc(mx, mz, 2, 0, Math.PI * 2);
     mctx.fill();
@@ -94,11 +94,11 @@ export function drawMinimap() {
   if (bossState.bossObj && bossState.bossObj.alive) {
     const bmx = cx + (bossState.bossObj.x - player.pos.x) * scale;
     const bmz = cy + (bossState.bossObj.z - player.pos.z) * scale;
-    mctx.fillStyle = '#ff1744';
+    mctx.fillStyle = '#c68c72';
     mctx.beginPath();
     mctx.arc(bmx, bmz, 5, 0, Math.PI * 2);
     mctx.fill();
-    mctx.strokeStyle = '#fdd835'; mctx.lineWidth = 1;
+    mctx.strokeStyle = '#d4c59e'; mctx.lineWidth = 1;
     mctx.stroke();
   }
 
@@ -117,13 +117,13 @@ export function drawMinimap() {
     const nmx = cx + (n.x - player.pos.x) * scale;
     const nmz = cy + (n.z - player.pos.z) * scale;
     if (nmx < 0 || nmx > w || nmz < 0 || nmz > h) continue;
-    mctx.fillStyle = n.hostile ? '#ff9800' : '#fdd835';
+    mctx.fillStyle = n.hostile ? '#ff9800' : '#d4c59e';
     mctx.beginPath();
     mctx.arc(nmx, nmz, 3, 0, Math.PI * 2);
     mctx.fill();
   }
 
-  mctx.fillStyle = '#4caf50';
+  mctx.fillStyle = '#dce0c5';
   mctx.beginPath();
   mctx.arc(cx, cy, 4, 0, Math.PI * 2);
   mctx.fill();

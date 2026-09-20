@@ -78,3 +78,17 @@ ui/                        — исходные фрагменты интерф�
 scripts/build-local.mjs    — сборка бандла
 server.js                  — опциональный HTTP/WebSocket relay
 ```
+
+## Визуальные исходники и проверки
+
+Модели и материалы создаются локально в `js/art/`. Подробности — в `docs/ART_DIRECTION.md`. Это суставная процедурная геометрия и ключевые анимационные клипы, не внешние Blender/GLB-файлы.
+
+```bash
+npm test
+npm run check
+npm run build
+npm run smoke:local
+npm run smoke:art
+```
+
+Браузерные тесты используют Playwright Chromium (`npx playwright install chromium`). Они открывают HTML через `file://` и проверяют работу без сети. Снимки экранов и отчёт сохраняются в `test-results/art/`. Одиночная игра по-прежнему не требует этих инструментов.

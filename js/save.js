@@ -18,6 +18,9 @@ export function saveGame(player, gameLocation, bossIndex) {
       upgrades: { ...player.upgrades },
       equipment: { ...player.equipment },
       inventory: [...player.inventory],
+      reputation: player.reputation || 0,
+      foundLore: [...(player.foundLore || [])],
+      ngPlus: player.ngPlus || 0,
     },
     position: {
       x: player.pos.x,
@@ -30,8 +33,9 @@ export function saveGame(player, gameLocation, bossIndex) {
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    return true;
   } catch {
-    // storage full or unavailable
+    return false;
   }
 }
 
@@ -46,9 +50,9 @@ export function loadGame() {
 }
 
 export function hasSave() {
-  return localStorage.getItem(STORAGE_KEY) !== null;
+  try { return Boolean(loadGame()?.player); } catch { return false; }
 }
 
 export function deleteSave() {
-  localStorage.removeItem(STORAGE_KEY);
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
 }
