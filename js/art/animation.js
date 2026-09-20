@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clamp01 } from './palette.js';
 import { secondaryMotion, groundHero } from './motion.js';
+import { PROCEDURAL_HERO_STATES, updateProceduralHero, releaseProceduralLocomotion } from './procedural-locomotion.js';
 
 const controllers = new WeakMap();
 const clipCache = new Map();
@@ -33,6 +34,16 @@ function clipsFor(root) {
     const duration=durations[state], tracks=[], steps=12;
     const times=Array.from({length:steps+1},(_,i)=>i/steps*duration);
     const values={};
+    // Hero locomotion is generated from travelled distance and velocity at runtime.
+    // These clips only provide a neutral base for mixer crossfades; they contain no gait or roll motion.
+    if(hero && PROCEDURAL_HERO_STATES.includes(state)) {
+      const neutralTimes=[0,duration];
+      for(const name of Object.keys(joints)) for(const axis of ['x','y','z'])
+        tracks.push(new THREE.NumberKeyframeTrack(`${name}.rotation[${axis}]`,neutralTimes,[0,0]));
+      if(joints.hip) tracks.push(new THREE.NumberKeyframeTrack('hip.position[y]',neutralTimes,[joints.hip.position.y,joints.hip.position.y]));
+      clips[state]=new THREE.AnimationClip(state,duration,tracks);
+      continue;
+    }
     for(const name of Object.keys(joints)) for(const axis of ['x','y','z']) values[`${name}.rotation[${axis}]`]=[];
     // A single root bob moves attached equipment together; no shape deformation.
     const vertical=hero||humanoid||kind!=='worm' ? joints.hip?.position.y : undefined;
@@ -61,7 +72,6 @@ function clipsFor(root) {
           put('armL','z',.75); put('armR','z',-.65); put('hip','x',state==='fall'?-.12:.1);
         }
         if(state==='land') { bob=-pulse*.14; put('legL','x',-.28*pulse); put('legR','x',-.28*pulse); put('kneeL','x',.6*pulse); put('kneeR','x',.6*pulse); }
-        if(state==='dodge') { put('hip','x',Math.PI*2*t); bob=.12; put('legL','x',-1.5); put('legR','x',-1.5); put('kneeL','x',1.8); put('kneeR','x',1.8); put('armL','x',-1.7); put('armR','x',-1.7); }
         if(state.startsWith('attack')) {
           const n=Number(state.at(-1)), wind=t<.25?t/.25:1-(t-.25)/.75;
           const strike=Math.sin(clamp01((t-.18)/.72)*Math.PI);
@@ -129,8 +139,6 @@ export class RigAnimator {
     this.play(state); this.elapsed+=dt; this.time+=dt;
     this.actions[this.state].setEffectiveTimeScale(speed);
     this.mixer.update(dt);
-    const joints=this.root.userData.joints;
-    secondaryMotion(this.root, dt, state, state==='run'?1.5:state==='walk'?.6:0, this.time);
     this.root.userData.animationState=this.state;
   }
   dispose() { this.mixer.stopAllAction(); this.mixer.uncacheRoot(this.root); }
@@ -145,9 +153,10 @@ export function animateHero(root,dt,p,movement={}) {
   if(p.grounded&&!anim.previousGrounded&&p.alive&&!p.dodging) anim.landUntil=anim.time+.18;
   if((anim.landUntil||0)>anim.time && ['idle','walk','run'].includes(state)) state='land';
   anim.previousGrounded=p.grounded||movement.menu;
-  const cadence = ['walk','run'].includes(state) ? (movement.sprinting ? 1.45 : 1.18) : 1;
-  anim.update(dt,state,cadence);
-  groundHero(root, dt, p, movement);
+  anim.update(dt,state,1);
+  const procedural=updateProceduralHero(root,dt,p,movement,state);
+  if(!procedural.applied) groundHero(root, dt, p, movement);
+  secondaryMotion(root, dt, state, procedural.normalizedSpeed * 1.5, anim.time);
   root.userData.body.material.emissive.set('#cd5b3b');
   root.userData.body.material.emissiveIntensity=Math.max(0,p.dmgFlash||0)*2;
   if(root.userData.sword) root.userData.sword.visible=!p.dodging;
@@ -155,10 +164,12 @@ export function animateHero(root,dt,p,movement={}) {
 export function animateCreature(root,dt,e) {
   const visual=root.userData.visual||root;
   const state=!e.alive||e.dying?'death':e.windup>0||e.windupTimer>0?'windup':e.flashTimer>.07?'hit':e.atkAnim>0||e.swipeLunging?'attack1':e.charging||e.state==='chase'?'run':'walk';
-  animatorFor(visual).update(dt,state,visual.userData.kind==='wasp'||visual.userData.kind==='firefly'?3:1);
+  const anim=animatorFor(visual);
+  anim.update(dt,state,visual.userData.kind==='wasp'||visual.userData.kind==='firefly'?3:1);
+  secondaryMotion(visual,dt,state,state==='run'?1.5:state==='walk'?.6:0,anim.time);
   if(visual.userData.body) {
     visual.userData.body.material.emissive.set('#cd714e');
     visual.userData.body.material.emissiveIntensity=Math.max(0,e.flashTimer||0)*2.5;
   }
 }
-export function releaseAnimator(root) { const target=root.userData.visual||root; controllers.get(target)?.dispose(); controllers.delete(target); }
+export function releaseAnimator(root) { const target=root.userData.visual||root; controllers.get(target)?.dispose(); controllers.delete(target); releaseProceduralLocomotion(target); }
