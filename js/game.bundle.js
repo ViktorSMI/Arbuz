@@ -921,7 +921,7 @@
       disableUnusedAttributes();
     }
     function dispose() {
-      reset();
+      reset2();
       for (const geometryId in bindingStates) {
         const programMap = bindingStates[geometryId];
         for (const programId in programMap) {
@@ -960,7 +960,7 @@
         delete programMap[program.id];
       }
     }
-    function reset() {
+    function reset2() {
       resetDefaultState();
       forceUpdate = true;
       if (currentState === defaultState) return;
@@ -974,7 +974,7 @@
     }
     return {
       setup,
-      reset,
+      reset: reset2,
       resetDefaultState,
       dispose,
       releaseStatesOfGeometry,
@@ -1841,7 +1841,7 @@
           break;
       }
     }
-    function reset() {
+    function reset2() {
       render.calls = 0;
       render.triangles = 0;
       render.points = 0;
@@ -1852,7 +1852,7 @@
       render,
       programs: null,
       autoReset: true,
-      reset,
+      reset: reset2,
       update: update2
     };
   }
@@ -5124,7 +5124,7 @@
         uboBindings.set(program, blockIndex);
       }
     }
-    function reset() {
+    function reset2() {
       gl.disable(gl.BLEND);
       gl.disable(gl.CULL_FACE);
       gl.disable(gl.DEPTH_TEST);
@@ -5221,7 +5221,7 @@
       compressedTexSubImage3D,
       scissor,
       viewport,
-      reset
+      reset: reset2
     };
   }
   function getByteLength(width, height, format, type) {
@@ -29447,6 +29447,306 @@ void main() {
     }
   });
 
+  // js/art/cloth-physics.js
+  function axisValues(attribute, getter, descending = false) {
+    const values = /* @__PURE__ */ new Map();
+    for (let i = 0; i < attribute.count; i++) {
+      const value = getter(attribute, i);
+      values.set(Math.round(value * 1e5), value);
+    }
+    return [...values.values()].sort((a, b) => descending ? b - a : a - b);
+  }
+  function nearest(values, value) {
+    let result = 0;
+    let distance = Infinity;
+    for (let i = 0; i < values.length; i++) {
+      const next = Math.abs(values[i] - value);
+      if (next < distance) {
+        distance = next;
+        result = i;
+      }
+    }
+    return result;
+  }
+  function pointDistance(array, a, b) {
+    a *= 3;
+    b *= 3;
+    return Math.hypot(array[b] - array[a], array[b + 1] - array[a + 1], array[b + 2] - array[a + 2]);
+  }
+  function addConstraint(state, a, b, stiffness) {
+    if (a === void 0 || b === void 0) return;
+    state.constraints.push({ a, b, length: pointDistance(state.rest, a, b), stiffness });
+  }
+  function topologyFromUv(position, uv) {
+    if (!uv || position.count !== uv.count) return null;
+    const us = axisValues(uv, (attribute, i) => attribute.getX(i));
+    const vs = axisValues(uv, (attribute, i) => attribute.getY(i), true);
+    const columns = us.length;
+    const rows = vs.length;
+    if (columns * rows !== position.count || columns < 2 || rows < 2) return null;
+    const grid = new Array(position.count);
+    for (let i = 0; i < uv.count; i++) {
+      grid[nearest(vs, uv.getY(i)) * columns + nearest(us, uv.getX(i))] = i;
+    }
+    if (grid.some((index) => index === void 0)) return null;
+    return { columns, rows, grid, source: "uv-grid" };
+  }
+  function topologyFromRows(position) {
+    const ys = axisValues(position, (attribute, i) => attribute.getY(i), true);
+    if (ys.length < 2) return null;
+    const rowLists = Array.from({ length: ys.length }, () => []);
+    for (let i = 0; i < position.count; i++) rowLists[nearest(ys, position.getY(i))].push(i);
+    const columns = rowLists[0]?.length || 0;
+    if (columns < 2 || rowLists.some((row) => row.length !== columns)) return null;
+    for (const row of rowLists) row.sort((a, b) => position.getX(a) - position.getX(b));
+    return { columns, rows: rowLists.length, grid: rowLists.flat(), source: "position-rows" };
+  }
+  function createState(mesh2) {
+    const position = mesh2.geometry.attributes.position;
+    if (!position) return null;
+    const topology = topologyFromUv(position, mesh2.geometry.attributes.uv) || topologyFromRows(position);
+    if (!topology || topology.columns * topology.rows !== position.count) return null;
+    const { columns, rows, grid } = topology;
+    const rest = new Float32Array(position.array);
+    const state = {
+      mesh: mesh2,
+      columns,
+      rows,
+      grid,
+      topology: topology.source,
+      rest,
+      current: new Float32Array(rest),
+      previous: new Float32Array(rest),
+      pinned: new Uint8Array(position.count),
+      constraints: [],
+      accumulator: 0,
+      initialized: false,
+      collarSeparated: false,
+      lastRootPosition: new Vector3(),
+      rootPosition: new Vector3(),
+      rootVelocity: new Vector3(),
+      lastRootVelocity: new Vector3(),
+      acceleration: new Vector3(),
+      localAcceleration: new Vector3(),
+      wind: new Vector3(),
+      parentQuaternion: new Quaternion(),
+      inverseQuaternion: new Quaternion(),
+      bodyBox: new Box3(),
+      bodyCenter: new Vector3(),
+      bodyLocalCenter: new Vector3(),
+      bodyRadii: new Vector3(0.76, 0.86, 0.72),
+      bodySize: new Vector3(),
+      bodyScale: new Vector3(),
+      clothScale: new Vector3(1, 1, 1),
+      maxStretch: 1,
+      collisionCorrections: 0
+    };
+    for (let column = 0; column < columns; column++) state.pinned[grid[column]] = 1;
+    for (let row = 0; row < rows; row++) {
+      for (let column = 0; column < columns; column++) {
+        const index = grid[row * columns + column];
+        if (column + 1 < columns) addConstraint(state, index, grid[row * columns + column + 1], 0.92);
+        if (row + 1 < rows) addConstraint(state, index, grid[(row + 1) * columns + column], 0.96);
+        if (row + 1 < rows && column + 1 < columns) {
+          addConstraint(state, index, grid[(row + 1) * columns + column + 1], 0.62);
+          addConstraint(state, grid[row * columns + column + 1], grid[(row + 1) * columns + column], 0.62);
+        }
+        if (column + 2 < columns) addConstraint(state, index, grid[row * columns + column + 2], 0.24);
+        if (row + 2 < rows) addConstraint(state, index, grid[(row + 2) * columns + column], 0.32);
+      }
+    }
+    mesh2.userData.clothPhysics = state;
+    states.set(mesh2, state);
+    return state;
+  }
+  function updateCollider(state, root) {
+    const body = root?.userData?.body;
+    if (!body?.geometry || !state.mesh.parent) return;
+    body.geometry.computeBoundingBox();
+    state.bodyBox.copy(body.geometry.boundingBox);
+    state.bodyBox.getCenter(state.bodyLocalCenter);
+    state.bodyBox.getSize(state.bodySize).multiplyScalar(0.5);
+    root.updateMatrixWorld(true);
+    body.localToWorld(state.bodyLocalCenter);
+    state.mesh.worldToLocal(state.bodyCenter.copy(state.bodyLocalCenter));
+    body.getWorldScale(state.bodyScale);
+    state.mesh.getWorldScale(state.clothScale);
+    state.bodyRadii.set(
+      state.bodySize.x * state.bodyScale.x / Math.max(1e-4, state.clothScale.x) + 0.065,
+      state.bodySize.y * state.bodyScale.y / Math.max(1e-4, state.clothScale.y) + 0.055,
+      state.bodySize.z * state.bodyScale.z / Math.max(1e-4, state.clothScale.z) + 0.075
+    );
+  }
+  function rearSurface(state, x, y) {
+    const dx = (x - state.bodyCenter.x) / state.bodyRadii.x;
+    const dy = (y - state.bodyCenter.y) / state.bodyRadii.y;
+    const cross = 1 - dx * dx - dy * dy;
+    return cross > 0 ? state.bodyCenter.z - state.bodyRadii.z * Math.sqrt(cross) : Infinity;
+  }
+  function separateCollar(state) {
+    for (let i = 0; i < state.pinned.length; i++) {
+      if (!state.pinned[i]) continue;
+      const offset = i * 3;
+      const surface2 = rearSurface(state, state.rest[offset], state.rest[offset + 1]);
+      if (Number.isFinite(surface2)) state.rest[offset + 2] = Math.min(state.rest[offset + 2], surface2 - 0.018);
+      for (let axis = 0; axis < 3; axis++) {
+        state.current[offset + axis] = state.previous[offset + axis] = state.rest[offset + axis];
+      }
+    }
+  }
+  function reset(state) {
+    state.current.set(state.rest);
+    state.previous.set(state.rest);
+    state.accumulator = 0;
+    state.rootVelocity.set(0, 0, 0);
+    state.lastRootVelocity.set(0, 0, 0);
+  }
+  function rootDynamics(state, root, dt) {
+    root.getWorldPosition(state.rootPosition);
+    if (!state.initialized) {
+      state.lastRootPosition.copy(state.rootPosition);
+      state.initialized = true;
+    }
+    if (!(dt > 0) || state.rootPosition.distanceTo(state.lastRootPosition) > 2.5) {
+      state.lastRootPosition.copy(state.rootPosition);
+      reset(state);
+      return;
+    }
+    state.rootVelocity.copy(state.rootPosition).sub(state.lastRootPosition).multiplyScalar(1 / dt);
+    state.acceleration.copy(state.rootVelocity).sub(state.lastRootVelocity).multiplyScalar(1 / dt);
+    if (state.acceleration.lengthSq() > 1225) state.acceleration.setLength(35);
+    state.lastRootPosition.copy(state.rootPosition);
+    state.lastRootVelocity.lerp(state.rootVelocity, 1 - Math.exp(-dt * 12));
+  }
+  function integrate(state, dt, time, motion, turn, rolling) {
+    state.mesh.parent.getWorldQuaternion(state.parentQuaternion);
+    state.inverseQuaternion.copy(state.parentQuaternion).invert();
+    state.localAcceleration.set(0, -9.81, 0).applyQuaternion(state.inverseQuaternion);
+    state.acceleration.multiplyScalar(-0.055).applyQuaternion(state.inverseQuaternion);
+    state.localAcceleration.add(state.acceleration);
+    state.wind.set(
+      Math.sin(time * 1.7) * 0.42 + turn * 1.15,
+      0.14 + Math.sin(time * 2.3) * 0.08,
+      -1.15 - motion * 3.35 - (rolling ? 2.2 : 0)
+    );
+    state.localAcceleration.add(state.wind);
+    const damping = rolling ? 0.965 : 0.978;
+    for (let i = 0; i < state.pinned.length; i++) {
+      const offset = i * 3;
+      if (state.pinned[i]) {
+        for (let axis = 0; axis < 3; axis++) {
+          state.current[offset + axis] = state.previous[offset + axis] = state.rest[offset + axis];
+        }
+        continue;
+      }
+      for (let axis = 0; axis < 3; axis++) {
+        const position = state.current[offset + axis];
+        const velocity = clamp2((position - state.previous[offset + axis]) * damping, -0.14, 0.14);
+        state.previous[offset + axis] = position;
+        state.current[offset + axis] = position + velocity + state.localAcceleration.getComponent(axis) * dt * dt;
+      }
+    }
+  }
+  function solveConstraint(state, constraint) {
+    const a = constraint.a * 3;
+    const b = constraint.b * 3;
+    const dx = state.current[b] - state.current[a];
+    const dy = state.current[b + 1] - state.current[a + 1];
+    const dz = state.current[b + 2] - state.current[a + 2];
+    const length = Math.hypot(dx, dy, dz);
+    if (!(length > 1e-7)) return;
+    state.maxStretch = Math.max(state.maxStretch, length / Math.max(1e-7, constraint.length));
+    const factor = (length - constraint.length) / length * constraint.stiffness;
+    const freeA = state.pinned[constraint.a] ? 0 : 1;
+    const freeB = state.pinned[constraint.b] ? 0 : 1;
+    const total = freeA + freeB;
+    if (!total) return;
+    if (freeA) {
+      state.current[a] += dx * factor * freeA / total;
+      state.current[a + 1] += dy * factor * freeA / total;
+      state.current[a + 2] += dz * factor * freeA / total;
+    }
+    if (freeB) {
+      state.current[b] -= dx * factor * freeB / total;
+      state.current[b + 1] -= dy * factor * freeB / total;
+      state.current[b + 2] -= dz * factor * freeB / total;
+    }
+  }
+  function collide(state) {
+    for (let i = 0; i < state.pinned.length; i++) {
+      if (state.pinned[i]) continue;
+      const offset = i * 3;
+      const surface2 = rearSurface(state, state.current[offset], state.current[offset + 1]);
+      if (Number.isFinite(surface2) && state.current[offset + 2] > surface2 - 0.012) {
+        state.current[offset + 2] = surface2 - 0.012;
+        state.previous[offset + 2] = Math.max(state.previous[offset + 2], state.current[offset + 2]);
+        state.collisionCorrections++;
+      }
+    }
+  }
+  function solve(state) {
+    state.maxStretch = 1;
+    for (let iteration = 0; iteration < ITERATIONS; iteration++) {
+      for (const constraint of state.constraints) solveConstraint(state, constraint);
+      collide(state);
+      for (let i = 0; i < state.pinned.length; i++) {
+        if (!state.pinned[i]) continue;
+        const offset = i * 3;
+        for (let axis = 0; axis < 3; axis++) state.current[offset + axis] = state.rest[offset + axis];
+      }
+    }
+  }
+  function write(state) {
+    const position = state.mesh.geometry.attributes.position;
+    position.array.set(state.current);
+    position.needsUpdate = true;
+    state.mesh.geometry.computeVertexNormals();
+    state.mesh.geometry.computeBoundingSphere();
+  }
+  function simulateCape(mesh2, root, dt, time = 0, options = {}) {
+    const state = states.get(mesh2) || createState(mesh2);
+    if (!state || !(dt > 0)) return null;
+    state.collisionCorrections = 0;
+    rootDynamics(state, root, Math.min(dt, 0.05));
+    updateCollider(state, root);
+    if (!state.collarSeparated) {
+      separateCollar(state);
+      state.collarSeparated = true;
+    }
+    state.accumulator = Math.min(state.accumulator + Math.min(dt, 0.05), STEP * MAX_STEPS);
+    let steps = 0;
+    while (state.accumulator >= STEP && steps < MAX_STEPS) {
+      integrate(state, STEP, time + steps * STEP, options.motion || 0, options.turn || 0, options.rolling === true);
+      solve(state);
+      state.accumulator -= STEP;
+      steps++;
+    }
+    write(state);
+    root.userData.capePhysics = {
+      version: CLOTH_PHYSICS_VERSION,
+      particles: state.pinned.length,
+      constraints: state.constraints.length,
+      pinned: state.pinned.reduce((sum, value) => sum + value, 0),
+      maxStretch: state.maxStretch,
+      collisionCorrections: state.collisionCorrections,
+      topology: state.topology,
+      anchorZ: mesh2.parent?.position.z ?? 0
+    };
+    return state;
+  }
+  var CLOTH_PHYSICS_VERSION, STEP, MAX_STEPS, ITERATIONS, states, clamp2;
+  var init_cloth_physics = __esm({
+    "js/art/cloth-physics.js"() {
+      init_three_module();
+      CLOTH_PHYSICS_VERSION = "cape-verlet-2";
+      STEP = 1 / 60;
+      MAX_STEPS = 4;
+      ITERATIONS = 5;
+      states = /* @__PURE__ */ new WeakMap();
+      clamp2 = MathUtils.clamp;
+    }
+  });
+
   // js/art/motion.js
   function spring(state, target, dt, frequency = 12) {
     if (!(dt > 0) || !Number.isFinite(target)) return state.value;
@@ -29480,42 +29780,36 @@ void main() {
     });
     return memories.get(root);
   }
-  function deformCloth(mesh2, time, motion = 0, turn = 0) {
-    const rest = mesh2.userData.clothRest;
-    if (!rest) return;
-    const p = mesh2.geometry.attributes.position, length = mesh2.userData.clothLength || 1;
-    for (let i = 0; i < p.count; i++) {
-      const x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2];
-      const weight = Math.max(0, Math.min(1, -y / length));
-      const ripple = Math.sin(time * 4.2 + x * 7 - weight * 5.5) * 0.035 + Math.sin(time * 6.3 - weight * 8) * 0.016;
-      p.setXYZ(
-        i,
-        x + turn * weight * weight * 0.16,
-        y + Math.abs(ripple) * weight,
-        z - weight * weight * motion * 0.25 + ripple * weight
-      );
-    }
-    p.needsUpdate = true;
-    mesh2.geometry.computeVertexNormals();
-  }
   function secondaryMotion(root, dt, state, speed = 0, time = 0) {
     const j = root.userData.joints, m = memory(root);
-    const active = ["walk", "run", "swim"].includes(state);
+    const active = ["walk", "run", "swim", "dodge"].includes(state);
     const yawDelta = Math.atan2(Math.sin(root.rotation.y - m.yaw), Math.cos(root.rotation.y - m.yaw));
     const turn = dt > 0 ? MathUtils.clamp(yawDelta / dt, -3, 3) : 0;
     m.yaw = root.rotation.y;
     const tilt = spring(m.turn, turn, dt, 7);
-    const flow = spring(m.cape, active ? speed : 0, dt, 6);
+    const targetFlow = active ? Math.max(speed, state === "dodge" ? 1.25 : 0) : 0;
+    const flow = spring(m.cape, targetFlow, dt, 6);
     if (j.cape) {
-      j.cape.rotation.x = -0.05 + flow * 0.16 + Math.sin(time * 2.4) * 0.018;
-      j.cape.rotation.z = -tilt * 0.08;
+      if (!j.cape.userData.physicalAnchor) {
+        j.cape.userData.physicalAnchor = {
+          x: j.cape.position.x,
+          y: Math.max(0.43, j.cape.position.y),
+          z: Math.min(-0.76, j.cape.position.z)
+        };
+      }
+      const anchor = j.cape.userData.physicalAnchor;
+      j.cape.position.set(anchor.x, anchor.y, anchor.z);
+      j.cape.rotation.x = -0.035 + Math.sin(time * 2.1) * 6e-3;
+      j.cape.rotation.z = -tilt * 0.018;
     }
     if (j.stem) {
       j.stem.rotation.z = Math.sin(time * 2.7) * 0.035 - tilt * 0.06;
       j.stem.rotation.x = -flow * 0.06;
     }
     if (j.tail) j.tail.rotation.y = Math.sin(time * 2.8) * 0.19 - tilt * 0.08;
-    for (const mesh2 of root.userData.cloth || []) deformCloth(mesh2, time, flow, tilt);
+    for (const mesh2 of root.userData.cloth || []) {
+      simulateCape(mesh2, root, dt, time, { motion: flow, turn: tilt, rolling: state === "dodge" });
+    }
     for (const [i, eye] of (root.userData.eyes || []).entries()) {
       const phase = (time + i * 0.015) % 4.7;
       const blink = phase < 0.13 ? Math.sin(phase / 0.13 * Math.PI) : 0;
@@ -29561,6 +29855,7 @@ void main() {
   var init_motion = __esm({
     "js/art/motion.js"() {
       init_three_module();
+      init_cloth_physics();
       memories = /* @__PURE__ */ new WeakMap();
     }
   });
@@ -29577,7 +29872,7 @@ void main() {
   }
   function sampleFootCycle(phase, runBlend = 0, sideOffset = 0) {
     const cycle = wrap01(phase + sideOffset);
-    const stanceRatio = MathUtils.lerp(0.64, 0.54, clamp2(runBlend, 0, 1));
+    const stanceRatio = MathUtils.lerp(0.64, 0.54, clamp3(runBlend, 0, 1));
     const stance = cycle < stanceRatio;
     if (stance) {
       const t2 = cycle / stanceRatio;
@@ -29599,7 +29894,7 @@ void main() {
     return target;
   }
   function setAxis(object, axis, target, weight) {
-    object.rotation[axis] = MathUtils.lerp(object.rotation[axis], target, clamp2(weight, 0, 1));
+    object.rotation[axis] = MathUtils.lerp(object.rotation[axis], target, clamp3(weight, 0, 1));
   }
   function worldFromRoot(root, x, y, z, target) {
     const yaw = root.rotation.y, c2 = Math.cos(yaw), s = Math.sin(yaw);
@@ -29625,7 +29920,7 @@ void main() {
   function releaseProceduralLocomotion(root) {
     controllers.delete(root);
   }
-  var PROCEDURAL_LOCOMOTION_VERSION, PROCEDURAL_HERO_STATES, TAU, controllers, clamp2, smoothstep2, damp2, wrap01, ProceduralHeroLocomotion;
+  var PROCEDURAL_LOCOMOTION_VERSION, PROCEDURAL_HERO_STATES, TAU, controllers, clamp3, smoothstep2, damp2, wrap01, ProceduralHeroLocomotion;
   var init_procedural_locomotion = __esm({
     "js/art/procedural-locomotion.js"() {
       init_three_module();
@@ -29635,10 +29930,10 @@ void main() {
       PROCEDURAL_HERO_STATES = Object.freeze(["walk", "run", "dodge"]);
       TAU = Math.PI * 2;
       controllers = /* @__PURE__ */ new WeakMap();
-      clamp2 = MathUtils.clamp;
+      clamp3 = MathUtils.clamp;
       smoothstep2 = (a, b, x) => {
         if (a === b) return x < a ? 0 : 1;
-        const t = clamp2((x - a) / (b - a), 0, 1);
+        const t = clamp3((x - a) / (b - a), 0, 1);
         return t * t * (3 - 2 * t);
       };
       damp2 = (value, target, frequency, dt) => MathUtils.lerp(value, target, 1 - Math.exp(-frequency * Math.max(0, dt)));
@@ -29699,7 +29994,7 @@ void main() {
           this.lateralSpeed = damp2(this.lateralSpeed, this.speed * this.direction.x, 12, dt);
           const yawDelta = Math.atan2(Math.sin(this.root.rotation.y - this.previousYaw), Math.cos(this.root.rotation.y - this.previousYaw));
           this.previousYaw = this.root.rotation.y;
-          this.yawRate = dt > 0 ? clamp2(yawDelta / dt, -5, 5) : 0;
+          this.yawRate = dt > 0 ? clamp3(yawDelta / dt, -5, 5) : 0;
           this.distance += distance;
           return distance;
         }
@@ -29756,14 +30051,14 @@ void main() {
           j.hip.worldToLocal(this.temp).sub(leg.position);
           const solved = solveLeg(this.temp.z, -this.temp.y);
           setAxis(leg, "x", solved.hip, weight);
-          setAxis(leg, "z", clamp2(-this.temp.x * 1.45, -0.42, 0.42), weight * 0.85);
+          setAxis(leg, "z", clamp3(-this.temp.x * 1.45, -0.42, 0.42), weight * 0.85);
           setAxis(knee, "x", solved.knee, weight);
           const yaw = this.root.rotation.y;
           const fx = Math.sin(yaw) * 0.13, fz = Math.cos(yaw) * 0.13;
           const hForward = finiteHeight(movement.getHeight, targetWorld.x + fx, targetWorld.z + fz, targetWorld.y) - finiteHeight(movement.getHeight, targetWorld.x - fx, targetWorld.z - fz, targetWorld.y);
           const slope = Math.atan2(hForward, 0.26);
           const toeLift = sample.stance ? 0 : sample.lift * 0.35;
-          const ankleTarget = clamp2(-slope - leg.rotation.x - knee.rotation.x - j.hip.rotation.x + toeLift, -1.05, 1.05);
+          const ankleTarget = clamp3(-slope - leg.rotation.x - knee.rotation.x - j.hip.rotation.x + toeLift, -1.05, 1.05);
           setAxis(ankle, "x", ankleTarget, weight);
         }
         applyGait(dt, player2, movement, state, distance) {
@@ -29773,15 +30068,15 @@ void main() {
           if (!active && state !== "idle") {
             this.weight.value = this.weight.velocity = 0;
             for (const foot of Object.values(this.feet)) foot.planted = foot.wasStance = false;
-            return { applied: false, speed: this.speed, normalizedSpeed: clamp2(this.speed / PLAYER_SPRINT, 0, 1) };
+            return { applied: false, speed: this.speed, normalizedSpeed: clamp3(this.speed / PLAYER_SPRINT, 0, 1) };
           }
           const weight = spring(this.weight, active ? 1 : 0, dt, active ? 18 : 14);
           if (!active && weight < 2e-3) {
             for (const foot of Object.values(this.feet)) foot.planted = foot.wasStance = false;
-            return { applied: false, speed: this.speed, normalizedSpeed: clamp2(this.speed / PLAYER_SPRINT, 0, 1) };
+            return { applied: false, speed: this.speed, normalizedSpeed: clamp3(this.speed / PLAYER_SPRINT, 0, 1) };
           }
-          const runBlend = clamp2((this.speed - 5.5) / (PLAYER_SPRINT - 5.5), 0, 1);
-          const phaseRunBlend = clamp2((this.instantSpeed - 5.5) / (PLAYER_SPRINT - 5.5), 0, 1);
+          const runBlend = clamp3((this.speed - 5.5) / (PLAYER_SPRINT - 5.5), 0, 1);
+          const phaseRunBlend = clamp3((this.instantSpeed - 5.5) / (PLAYER_SPRINT - 5.5), 0, 1);
           const strideDistance = MathUtils.lerp(2.55, 4.15, phaseRunBlend);
           this.phase = advanceStridePhase(this.phase, active ? distance : 0, strideDistance);
           const phaseRate = strideDistance > 0 ? this.instantSpeed / strideDistance : 0;
@@ -29791,8 +30086,8 @@ void main() {
           const doubleSupport = Math.abs(Math.sin(this.phase * TAU));
           const directionForward = this.direction.z;
           const directionSide = this.direction.x;
-          const forwardLean = clamp2(this.forwardSpeed / PLAYER_SPRINT * 0.16 + this.acceleration * 4e-3, -0.12, 0.24);
-          const lateralLean = clamp2(-this.lateralSpeed / PLAYER_SPRINT * 0.11 - this.yawRate * 0.025, -0.18, 0.18);
+          const forwardLean = clamp3(this.forwardSpeed / PLAYER_SPRINT * 0.16 + this.acceleration * 4e-3, -0.12, 0.24);
+          const lateralLean = clamp3(-this.lateralSpeed / PLAYER_SPRINT * 0.11 - this.yawRate * 0.025, -0.18, 0.18);
           const hipTwist = wave * MathUtils.lerp(0.045, 0.095, runBlend) * directionForward;
           j.hip.position.y = MathUtils.lerp(j.hip.position.y, this.restHipY - doubleSupport * MathUtils.lerp(0.018, 0.052, runBlend), weight);
           setAxis(j.hip, "x", spring(this.lean, forwardLean, dt, 12), weight);
@@ -29826,7 +30121,7 @@ void main() {
             contacts: { L: left.stance, R: right.stance },
             direction: { x: this.direction.x, z: this.direction.z }
           };
-          return { applied: true, speed: this.speed, normalizedSpeed: clamp2(this.speed / PLAYER_SPRINT, 0, 1), phase: this.phase };
+          return { applied: true, speed: this.speed, normalizedSpeed: clamp3(this.speed / PLAYER_SPRINT, 0, 1), phase: this.phase };
         }
         applyRoll(dt, player2, state, distance) {
           const j = this.joints;
@@ -29860,7 +30155,7 @@ void main() {
           this.roll.angularVelocity = damp2(this.roll.angularVelocity, omega, 18, dt);
           this.roll.angle = nextAngle;
           const expectedDistance = DODGE_SPEED * DODGE_DURATION;
-          const progress = clamp2(this.roll.distance / expectedDistance, 0, 1);
+          const progress = clamp3(this.roll.distance / expectedDistance, 0, 1);
           const tuck = smoothstep2(0, 0.16, progress) * (1 - smoothstep2(0.78, 1, progress));
           const compression = Math.sin(progress * Math.PI) * 0.085;
           this.rollQuaternion.setFromAxisAngle(this.rollAxis, this.roll.angle);
@@ -29893,10 +30188,10 @@ void main() {
           return true;
         }
         update(dt, player2, movement, state) {
-          dt = clamp2(dt || 0, 0, 0.05);
+          dt = clamp3(dt || 0, 0, 0.05);
           const distance = this.measure(dt, player2);
           const rolling = this.applyRoll(dt, player2, state, distance);
-          if (rolling) return { applied: true, rolling: true, speed: this.speed, normalizedSpeed: clamp2(this.speed / PLAYER_SPRINT, 0, 1) };
+          if (rolling) return { applied: true, rolling: true, speed: this.speed, normalizedSpeed: clamp3(this.speed / PLAYER_SPRINT, 0, 1) };
           return this.applyGait(dt, player2, movement || {}, state, distance);
         }
       };
@@ -29922,10 +30217,10 @@ void main() {
     if (clipCache.has(key)) return clipCache.get(key);
     const hero = kind === "hero", humanoid2 = hero || ["janitor", "soldier", "chef"].includes(kind);
     const bird = ["bird", "crow", "wasp", "firefly"].includes(kind);
-    const states = hero ? HERO_STATES : ["idle", "walk", "run", "windup", "attack1", "hit", "death"];
+    const states2 = hero ? HERO_STATES : ["idle", "walk", "run", "windup", "attack1", "hit", "death"];
     const durations = { idle: 2.8, walk: 0.8, run: 0.48, jump: 0.3, air: 0.8, fall: 0.5, land: 0.18, dodge: 0.35, attack1: 0.25, attack2: 0.25, attack3: 0.25, block: 1, parry: 0.15, hit: 0.18, death: 0.55, cast: 0.45, swim: 1, windup: 0.32 };
     const clips = {};
-    for (const state of states) {
+    for (const state of states2) {
       const duration = durations[state], tracks = [], steps = 12;
       const times = Array.from({ length: steps + 1 }, (_, i) => i / steps * duration);
       const values = {};
