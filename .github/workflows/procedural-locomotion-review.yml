@@ -21,6 +21,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Apply frame-rate invariance correction
+        run: python .locomotion-fix.py
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Syntax, unit tests and standalone build
@@ -46,14 +48,14 @@ jobs:
           name: procedural-locomotion-review
           path: /tmp/procedural-locomotion-review/
           retention-days: 7
-      - name: Commit validated browser bundle
+      - name: Commit validated source and browser bundle
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add js/game.bundle.js package-lock.json
+          git add js/art/procedural-locomotion.js js/game.bundle.js package-lock.json
           if git diff --cached --quiet; then
             echo "Generated build is current"
           else
-            git commit -m "build: refresh procedural locomotion bundle"
+            git commit -m "build: validate frame-rate invariant procedural locomotion"
             git push origin HEAD:work/procedural-locomotion
           fi
