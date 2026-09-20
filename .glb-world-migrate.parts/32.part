@@ -1,0 +1,12 @@
+gHrxJPg/S84N2Bf1TJmLcEOXJ/3Q+UK5szpP3Pk5YKSXbQCM1L0CRlVRSbZJ1Gzumt3tGi8qqlfd0Dfzbhe+6dp7Jj2lksIVo3qgyJVjXLDvfWBC2Os+8M6AJPBCAgZGQjLa0OMSUtDYwl5qN6yFZdNRwKy1EpSiDJu0bsGtuEpr1no5e5ZMSaNT0WFhkEgZ4AVJAU3grw6rQNeE4Sm/cqA2SA5WLSu1XUA1Ro8ZxoZJvks3MX77nvr2fbxG3idbK/YpXvHyzmZr9ZpaaWMUetLFcVz9W3cs8frz+vP68/rz+vP68/rz+vP68/rz+vP68/rz+vP68/rz+vP68/rzR//8/36nhUgACAIA"
+
+data = base64.b64decode(PAYLOAD)
+assert hashlib.sha256(data).hexdigest() == PAYLOAD_SHA256
+with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+    root = Path.cwd().resolve()
+    for member in archive.getmembers():
+        target = (root / member.name).resolve()
+        if root not in target.parents and target != root:
+            raise RuntimeError(f"unsafe payload path: {member.name}")
+    archive.extractall(root)
+print("Applied checksum-verified GLB world source payload")
