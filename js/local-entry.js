@@ -1,3 +1,4 @@
+import { preloadGameModels } from './art/model-manifest.js';
 import menuHtml from '../ui/game-menu.html';
 import hudHtml from '../ui/game-hud.html';
 import panelsHtml from '../ui/game-panels.html';
@@ -27,7 +28,15 @@ async function boot() {
   // поэтому index3d.html можно открыть напрямую как обычный локальный файл.
   gameRoot.innerHTML = [menuHtml, hudHtml, panelsHtml, overlaysHtml].join('\n');
 
-  // Основная игра загружается после появления всех UI-элементов в DOM.
+  // Настоящие GLB-модели вшиты в автономный bundle и разбираются без fetch/file CORS.
+  // При повреждённом ассете игра сохранит процедурный fallback, но проверка сборки это поймает.
+  try {
+    await preloadGameModels();
+  } catch (error) {
+    console.warn('GLB model pack fallback:', error);
+  }
+
+  // Основная игра загружается после появления интерфейса и модельного пакета.
   await import('./main.js');
 
   requestAnimationFrame(() => {

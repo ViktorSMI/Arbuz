@@ -9,6 +9,8 @@ import { part, tube, link, leaf, ring, collectStatic, disposeRig } from './art/g
 import { getSetting } from './settings.js';
 import { createTree, createGroundcover, foliageShader } from './art/botany.js';
 import { createSkyMaterial, setGroundPalette } from './art/landscape.js';
+import { cloneModelScene, modelAssetReady, tintModel } from './art/model-assets.js';
+import { createModelDetailField } from './art/model-details.js';
 
 export const obstacles=[];
 export const grassMat=material('leaf','#ece5c6',{side:THREE.DoubleSide});
@@ -16,7 +18,7 @@ export const leafMats=[material('canopy','#c7d4a4'),material('canopy','#e0dba8')
 const timeUniform={value:0};
 for(const mat of leafMats) foliageShader(mat,timeUniform,.8);
 const worldRoot=new THREE.Group(); worldRoot.name='orchard-world'; scene.add(worldRoot);
-let current=-1, grass=null, lightMotes=null, lanterns=[];
+let current=-1, grass=null, lightMotes=null, modelDetails=null, lanterns=[];
 let currentQuality='';
 
 // Shared wind shader moves blade tips, leaving their roots fixed.
@@ -32,8 +34,31 @@ grassMat.onBeforeCompile=shader=>{
 };
 grassMat.customProgramCacheKey=()=> 'orchard-wind-1';
 
-function tree(index,rng) { return createTree(index,rng,leafMats,getSetting('quality')); }
+function authoredProp(key,palette={}) {
+  const root=cloneModelScene(key);
+  if(!root)return null;
+  tintModel(root,palette); root.userData.authoredModel=`${key}.glb`; return root;
+}
+function tree(index,rng) {
+  if(modelAssetReady('prop_orchard_tree')) {
+    const style=landStyle(index),root=authoredProp('prop_orchard_tree',{leaf:style.foliage,moss:style.foliage,bark:index===2?'#6c6560':'#81705b'});
+    const scale=.78+rng()*.42;root.scale.setScalar(scale);
+    root.traverse(object=>{
+      if(!object.isMesh)return;
+      const materials=Array.isArray(object.material)?object.material:[object.material];
+      if(materials.some(mat=>(mat.name||'').toLowerCase().includes('leaf'))&&!object.geometry.attributes.color)
+        object.geometry.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(object.geometry.attributes.position.count*3).fill(1),3));
+      for(const mat of materials)if((mat.name||'').toLowerCase().includes('leaf'))foliageShader(mat,timeUniform,.72);
+    });
+    return root;
+  }
+  return createTree(index,rng,leafMats,getSetting('quality'));
+}
 function memoryArch(index) {
+  if(modelAssetReady('prop_memory_arch')) {
+    const style=landStyle(index);
+    return authoredProp('prop_memory_arch',{stone:style.stone,bronze:style.accent,eye:style.accent});
+  }
   const root=new THREE.Group(), stone=material('stone','#e3e0c7'), bronze=material('gold');
   for(const s of [-1,1]) {
     for(let i=0;i<4;i++) part(root,stone,[s*2.0,.47+i*.9,0],[1.05,.88,1.15],'box').rotation.y=(i%2?.035:-.02);
@@ -44,7 +69,7 @@ function memoryArch(index) {
     const a=i/8*Math.PI, x=Math.cos(a)*2, y=4.05+Math.sin(a)*1.8;
     const block=part(root,stone,[x,y,0],[.79,.77,1.06],'box'); block.rotation.z=a-Math.PI/2;
   }
-  const seal=ring(root,bronze,.44,.038,[0,5.4,.60]);
+  ring(root,bronze,.44,.038,[0,5.4,.60]);
   const seed=leaf(root,glow(landStyle(index).accent,.5),.54,.18,.02); seed.position.set(0,5.12,.64);
   for(const s of [-1,1]) tube(root,material('bark'),[[s*2.25,0,.4],[s*1.9,1.4,.64],[s*2.23,2.8,.58],[s*1.8,4.3,.63]],.065,14);
   return root;
@@ -58,6 +83,13 @@ function lantern(root,x,y,z,index) {
   return g;
 }
 function prop(index,rng) {
+  const style=landStyle(index);
+  if(modelAssetReady('prop_fallen_log')&&rng()<.22)
+    return authoredProp('prop_fallen_log',{moss:style.foliage,bark:index===5?'#5f4c3d':'#80664d'});
+  if(index===0&&modelAssetReady('prop_trellis'))
+    return authoredProp('prop_trellis',{leaf:style.foliage,bark:'#866c4f'});
+  if(index===5&&modelAssetReady('prop_seed_shrine'))
+    return authoredProp('prop_seed_shrine',{stone:style.stone,bronze:style.accent,eye:style.accent});
   const root=new THREE.Group(), wood=material('bark'), iron=material('iron'), stone=material('stone','#cfceb9');
   if(index===0) {
     // Orchard trellis: broken planting frames and a surviving vine.
@@ -100,7 +132,7 @@ function place(root,x,z,rotation=0) {
 function clearWorld() {
   for(const child of [...worldRoot.children]) disposeRig(child);
   for(const light of lanterns) { scene.remove(light); light.dispose(); }
-  lanterns=[]; obstacles.length=0; grass=null; lightMotes=null;
+  lanterns=[]; obstacles.length=0; grass=null; lightMotes=null; modelDetails=null;
 }
 function buildWorld(index) {
   clearWorld(); current=index; setGroundPalette(index); const rng=randomSeed(83717+index*137), style=landStyle(index);
@@ -130,18 +162,29 @@ function buildWorld(index) {
     if(getTerrainHeight(x,z)<WATER_LEVEL+.5 || pathDistance(x,z)<3 || Math.hypot(x-BOSS_ARENA_POS.x,z-BOSS_ARENA_POS.z)<BOSS_ARENA_R+3) continue;
     place(prop(index,rng),x,z,rng()*6.28);
   }
-  // Foreground ruins beside the main path.
+  // Foreground authored landmarks make the first minutes readable from a distance.
   place(prop(index,rng),-5,6,.45); place(prop(index,rng),10,24,-.5);
+  if(modelAssetReady('prop_fallen_log')) {
+    const log=authoredProp('prop_fallen_log',{moss:style.foliage,bark:'#765c46'});log.scale.setScalar(.85);place(log,-11,17,.32);
+  }
+  if(modelAssetReady('prop_seed_shrine')) {
+    const shrine=authoredProp('prop_seed_shrine',{stone:style.stone,bronze:style.accent,eye:style.accent});
+    shrine.scale.setScalar(.9);place(shrine,18,31,-.45);
+  }
   for(let i=0;i<30;i++) {
     const x=(rng()-.5)*330,z=(rng()-.5)*330,y=getTerrainHeight(x,z);
     if(y<WATER_LEVEL+.4 || Math.hypot(x,z)<12 || pathDistance(x,z)<4) continue;
-    const rock=new THREE.Group();
-    for(let j=0;j<3;j++) part(rock,material('stone','#c8c8b4'),[(rng()-.5)*1.5,.3+j*.25,(rng()-.5)*1.5],[.5+rng(),.4+rng()*.4,.5+rng()],'stone').rotation.set(rng(),rng(),rng());
-    place(rock,x,z); obstacles.push({x,z,r:.8});
+    const rock=modelAssetReady('prop_rock_cluster')
+      ? authoredProp('prop_rock_cluster',{stone:style.stone,moss:style.foliage})
+      : new THREE.Group();
+    if(!rock.children.length)for(let j=0;j<3;j++) part(rock,material('stone','#c8c8b4'),[(rng()-.5)*1.5,.3+j*.25,(rng()-.5)*1.5],[.5+rng(),.4+rng()*.4,.5+rng()],'stone').rotation.set(rng(),rng(),rng());
+    rock.scale.setScalar(.65+rng()*.65);place(rock,x,z,rng()*6.28); obstacles.push({x,z,r:.8});
   }
   buildGrass(rng,index);
   buildMotes(rng,index);
   worldRoot.add(createGroundcover(index,rng,getTerrainHeight,pathDistance,mergeGeometries,timeUniform,getSetting('quality')));
+  modelDetails=createModelDetailField(index,rng,getTerrainHeight,pathDistance,getSetting('quality'));
+  worldRoot.add(modelDetails);
   for(const [x,z] of [[-3,3],[7,15]]) {
     const light=new THREE.PointLight(style.accent,2,8,2); light.position.set(x,getTerrainHeight(x,z)+1.3,z); scene.add(light); lanterns.push(light);
   }
@@ -201,4 +244,4 @@ export function updateWorld(dt,focus,index=0,timeOfDay=.25) {
   for(let i=0;i<lanterns.length;i++)lanterns[i].intensity=1.8+Math.sin(timeUniform.value*4+i)*.2;
   if(grass && Math.hypot(focus.x-BOSS_ARENA_POS.x,focus.z-BOSS_ARENA_POS.z)<BOSS_ARENA_R) grass.visible=quality!=='low'; else if(grass)grass.visible=true;
 }
-export function worldStats(){return {biome:current,obstacles:obstacles.length,grass:grass?.count||0,groups:worldRoot.children.length};}
+export function worldStats(){return {biome:current,obstacles:obstacles.length,grass:grass?.count||0,modelDetails:modelDetails?.userData.instanceCount||0,groups:worldRoot.children.length};}

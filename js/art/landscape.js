@@ -26,11 +26,13 @@ export function setGroundPalette(index) {
 export function terrainShader(mat) {
   mat.onBeforeCompile=shader=>{
     Object.assign(shader.uniforms,soilUniforms);
-    shader.vertexShader='varying vec3 vGroundPosition; varying float vGroundSlope;\n'+shader.vertexShader;
+    shader.vertexShader='varying vec3 vGroundPosition; varying vec3 vGroundNormal; varying float vGroundSlope;\n'+shader.vertexShader;
     shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
-      vGroundPosition=(modelMatrix*vec4(position,1.0)).xyz; vGroundSlope=1.0-normal.y;
+      vGroundPosition=(modelMatrix*vec4(position,1.0)).xyz;
+      vGroundNormal=normalize(mat3(modelMatrix)*normal);
+      vGroundSlope=1.0-clamp(vGroundNormal.y,0.0,1.0);
     `);
-    shader.fragmentShader=`varying vec3 vGroundPosition; varying float vGroundSlope;
+    shader.fragmentShader=`varying vec3 vGroundPosition; varying vec3 vGroundNormal; varying float vGroundSlope;
       uniform vec3 uSoil,uMoss,uStone; uniform float uVegetation;\n${glslNoise}\n`+shader.fragmentShader;
     shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`
       float patches=orchardFbm(vGroundPosition.xz*.12);
@@ -39,12 +41,21 @@ export function terrainShader(mat) {
       float vegetation=verge*(.48+.52*smoothstep(.3,.7,patches))*uVegetation;
       vec3 ground=mix(uSoil,uMoss,vegetation);
       ground=mix(ground,uStone,smoothstep(.12,.36,vGroundSlope));
-      vec3 fine=texture2D(map,vGroundPosition.xz*.23).rgb;
+      vec3 blend=pow(abs(normalize(vGroundNormal)),vec3(5.0));
+      blend/=max(.0001,blend.x+blend.y+blend.z);
+      vec3 sampleX=texture2D(map,vGroundPosition.zy*.19).rgb;
+      vec3 sampleY=texture2D(map,vGroundPosition.xz*.23).rgb;
+      vec3 sampleZ=texture2D(map,vGroundPosition.xy*.19).rgb;
+      vec3 fine=sampleX*blend.x+sampleY*blend.y+sampleZ*blend.z;
       vec3 broad=texture2D(map,mat2(.8,.6,-.6,.8)*vGroundPosition.xz*.057).rgb;
-      diffuseColor.rgb=ground*(.74+fine.g*.65)*(.88+broad.g*.36);
+      float scree=smoothstep(.18,.52,vGroundSlope)*orchardFbm(vGroundPosition.xz*.34);
+      float damp=smoothstep(.3,-3.0,vGroundPosition.y)*(.35+.65*patches);
+      ground=mix(ground,uStone,scree*.42);
+      ground=mix(ground,ground*vec3(.58,.72,.66),damp*.45);
+      diffuseColor.rgb=ground*(.70+fine.g*.72)*(.86+broad.g*.40);
     `);
   };
-  mat.customProgramCacheKey=()=> 'orchard-terrain-2';
+  mat.customProgramCacheKey=()=> 'orchard-terrain-3-triplanar';
 }
 
 export function createSkyMaterial(time) {

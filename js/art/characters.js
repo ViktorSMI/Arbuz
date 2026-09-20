@@ -3,6 +3,7 @@ import { part, pivot, tube, link, leaf, ring } from './geometry.js';
 import { material, glow } from './materials.js';
 import { organicGeometry, seedGeometry, sculpt } from './sculpt.js';
 import { ART_VERSION } from './palette.js';
+import { cloneModelNode, modelAssetReady } from './model-assets.js';
 
 const twoSided = { side: THREE.DoubleSide };
 const unique = base => { const mat=base.clone(); mat.userData.sharedArtMaterial=false; return mat; };
@@ -53,8 +54,69 @@ function rootRig(kind) {
 function joint(root,parent,name,pos) {
   const j=pivot(parent,name,pos); j.userData.rigRoot=root; root.userData.joints[name]=j; return j;
 }
+function assetNode(parent,key,name,materialOverride=null) {
+  const object=cloneModelNode(key,name,{material:materialOverride});
+  if(!object)return null;
+  parent.add(object); return object;
+}
+function registerCloth(root,mesh,length) {
+  if(!mesh?.geometry?.attributes?.position)return mesh;
+  mesh.geometry=mesh.geometry.clone();
+  mesh.geometry.userData.sharedModelAsset=false;
+  mesh.userData.clothRest=new Float32Array(mesh.geometry.attributes.position.array);
+  mesh.userData.clothLength=length;
+  (root.userData.cloth ||= []).push(mesh);
+  return mesh;
+}
+function createHeroAsset() {
+  const root=rootRig('hero'), hip=joint(root,root,'hip',[0,1.17,0]);
+  root.userData.modelAsset='hero_arbuzilla.glb';
+  const body=assetNode(hip,'hero','body');
+  root.userData.body=body;
+  assetNode(hip,'hero','face_mask');
+  for(const side of ['L','R']) {
+    const eye=assetNode(hip,'hero',`eye_${side}`);
+    if(eye){eye.userData.openScale=eye.scale.y;(root.userData.eyes ||= []).push(eye);}
+  }
+  for(const [s,side] of [[-1,'L'],[1,'R']]) {
+    const arm=joint(root,hip,`arm${side}`,[s*.72,.10,0]);
+    const plate=assetNode(arm,'hero','shoulder_plate'); if(plate)plate.rotation.z=-s*.24;
+    assetNode(arm,'hero','upper_arm');
+    const elbow=joint(root,arm,`elbow${side}`,[s*.055,-.32,0]);
+    assetNode(elbow,'hero','forearm');
+    const wrist=joint(root,elbow,`wrist${side}`,[0,-.32,.055]);
+    assetNode(wrist,'hero','hand');
+    const leg=joint(root,hip,`leg${side}`,[s*.29,-.5,0]);
+    assetNode(leg,'hero','thigh');
+    const knee=joint(root,leg,`knee${side}`,[s*.025,-.29,0]);
+    assetNode(knee,'hero','shin');
+    const ankle=joint(root,knee,`ankle${side}`,[0,-.24,.015]);
+    const foot=assetNode(ankle,'hero','foot');
+    root.userData[`shoe${side}`]=foot;
+  }
+  const stem=joint(root,hip,'stem',[0,.78,0]);
+  assetNode(stem,'hero','stem');
+  for(const s of [-1,1]) {
+    const sprout=assetNode(stem,'hero','sprout');
+    if(sprout){sprout.rotation.z=s*.92;sprout.rotation.y=s*.5;}
+  }
+  const cape=joint(root,hip,'cape',[0,.38,-.5]);
+  registerCloth(root,assetNode(cape,'hero','cape'),1.25);
+  const shield=assetNode(root.userData.joints.elbowL,'hero','shield');
+  if(shield)shield.rotation.z=-.16;
+  const sword=pivot(root.userData.joints.wristR,'weapon',[0,-.03,.03]);
+  for(const name of ['sword_blade','sword_grip','sword_guard'])assetNode(sword,'hero',name);
+  sword.rotation.x=2.05; root.userData.sword=sword;
+  root.userData.armL=root.userData.joints.armL; root.userData.armR=root.userData.joints.armR;
+  root.userData.legL=root.userData.joints.legL; root.userData.legR=root.userData.joints.legR;
+  return root;
+}
 
 export function createHero() {
+  return modelAssetReady('hero') ? createHeroAsset() : createHeroProcedural();
+}
+
+function createHeroProcedural() {
   const root=rootRig('hero'), vine=material('bark','#abb687'), bronze=material('gold'), cloth=material('cloth','#e0b8a4',twoSided);
   const hip=joint(root,root,'hip',[0,1.17,0]);
   const body=sculpt(hip,organicGeometry({lobes:10,depth:.018,taper:.055}),skin(),[0,0,0],[.73,.81,.66]);
@@ -119,7 +181,10 @@ export function createHero() {
 function insect(kind, boss = false) {
   const root=rootRig(kind), chitin=material('chitin',boss?'#bec389':'#c3cfb5'), dark=material('iron','#869288'), gold=material('gold');
   const hip=joint(root,root,'hip',[0,.58,0]);
-  const body=sculpt(hip,organicGeometry({lobes:8,depth:.04,rings:18,sides:28}),unique(chitin),[0,0,-.12],[.52,.38,.73]); root.userData.body=body;
+  const body=modelAssetReady('enemy_insect')
+    ? assetNode(hip,'enemy_insect','body',unique(chitin))
+    : sculpt(hip,organicGeometry({lobes:8,depth:.04,rings:18,sides:28}),unique(chitin),[0,0,-.12],[.52,.38,.73]);
+  root.userData.body=body; if(body)body.userData.modelAssetArchetype='enemy_insect.glb';
   const ant=kind==='ant', roach=kind==='roach', mantis=kind==='mantis';
   body.scale.set(ant?.26:.52,mantis?.24:.38,ant?.4:.73);
   if (ant) part(hip,chitin,[0,-.04,-.78],[.34,.32,.44]);
@@ -130,8 +195,10 @@ function insect(kind, boss = false) {
     tube(head,dark,[[s*.16,.17,.08],[s*.31,.42,.30],[s*.4,.47,.65]],.018);
     tube(head,gold,[[s*.15,-.05,.18],[s*.29,-.09,.40],[s*.13,-.03,.53]],.04);
   }
-  // Two articulated elytra with an inset seam and engraved edge.
-  if (!ant && !mantis) for (const [s,side] of [[-1,'L'],[1,'R']]) {
+  // The authored GLB carries a closed shell; the procedural fallback keeps articulated elytra.
+  if (!ant && !mantis && modelAssetReady('enemy_insect')) {
+    const shell=assetNode(hip,'enemy_insect','shell',chitin); if(shell)shell.userData.modelAssetArchetype='enemy_insect.glb';
+  } else if (!ant && !mantis) for (const [s,side] of [[-1,'L'],[1,'R']]) {
     const wing=joint(root,hip,`shell${side}`,[s*.05,.17,-.13]);
     const plate=sculpt(wing,organicGeometry({lobes:7,depth:.05,rings:16,sides:28}),chitin,[s*.23,.07,0],[.29,roach?.17:.28,.68]);
     plate.rotation.z=s*-.18;
@@ -166,7 +233,10 @@ function flyer(kind, boss = false) {
   const root=rootRig(kind), bird=kind==='bird'||kind==='crow', firefly=kind==='firefly';
   const bodyMat=material(bird?'feather':'chitin',bird?'#a9b9ba':'#c7ba81',bird?twoSided:{});
   const hip=joint(root,root,'hip',[0,.35,0]);
-  const body=part(hip,unique(bodyMat),[0,0,0],[.3,.4,.55]); root.userData.body=body;
+  const body=modelAssetReady('enemy_bird') && bird
+    ? assetNode(hip,'enemy_bird','body',unique(bodyMat))
+    : part(hip,unique(bodyMat),[0,0,0],[.3,.4,.55]);
+  root.userData.body=body; if(body&&bird)body.userData.modelAssetArchetype='enemy_bird.glb';
   const head=joint(root,hip,'head',[0,.24,.40]);
   part(head,bodyMat,[0,0,0],[.23,.26,.26]); eyes(head,.045,.224,.12,.045);
   if (bird) {
@@ -179,7 +249,10 @@ function flyer(kind, boss = false) {
   }
   for(const [s,side] of [[-1,'L'],[1,'R']]) {
     const wing=joint(root,hip,`wing${side}`,[s*.21,.17,-.04]);
-    if (bird) for(let i=0;i<7;i++) {
+    if (bird && modelAssetReady('enemy_bird')) {
+      const authoredWing=assetNode(wing,'enemy_bird','wing',bodyMat);
+      if(authoredWing){authoredWing.scale.x*=s;authoredWing.rotation.z=-s*1.15;}
+    } else if (bird) for(let i=0;i<7;i++) {
       const feather=leaf(wing,bodyMat,.85-i*.055,.12,.14); feather.position.set(s*i*.09,-i*.03,-i*.075); feather.rotation.z=-s*(1.15+i*.07);
     } else {
       const membrane=material('bone','#e6e6c5',{...twoSided,transparent:true,opacity:.63,metalness:.1});
@@ -199,7 +272,10 @@ function flyer(kind, boss = false) {
 function quadruped(kind, boss = false) {
   const root=rootRig(kind), fur=material('fur',kind==='cat'?'#c3a38b':'#b0acb3');
   const hip=joint(root,root,'hip',[0,.62,0]);
-  const body=part(hip,unique(fur),[0,0,-.04],[.38,.37,.68]); root.userData.body=body;
+  const body=modelAssetReady('enemy_quadruped')
+    ? assetNode(hip,'enemy_quadruped','body',unique(fur))
+    : part(hip,unique(fur),[0,0,-.04],[.38,.37,.68]);
+  root.userData.body=body; if(body)body.userData.modelAssetArchetype='enemy_quadruped.glb';
   const head=joint(root,hip,'head',[0,.14,.59]);
   part(head,fur,[0,0,0],[.28,.28,.3]);
   part(head,material('fur','#b8aaa6'),[0,-.095,.28],[.18,.14,kind==='cat'?.15:.29]);
@@ -232,7 +308,10 @@ function quadruped(kind, boss = false) {
 function humanoid(kind, boss = false) {
   const root=rootRig(kind), iron=material('iron'), fabric=material('cloth',kind==='chef'?'#e6d7b8':'#96a5a0');
   const hip=joint(root,root,'hip',[0,1.18,0]);
-  const body=part(hip,unique(fabric),[0,0,0],[.35,.48,.24]); root.userData.body=body;
+  const body=modelAssetReady('enemy_humanoid')
+    ? assetNode(hip,'enemy_humanoid','torso',unique(fabric))
+    : part(hip,unique(fabric),[0,0,0],[.35,.48,.24]);
+  root.userData.body=body; if(body)body.userData.modelAssetArchetype='enemy_humanoid.glb';
   const head=joint(root,hip,'head',[0,.64,0]);
   part(head,material('bone','#c7c1aa'),[0,0,0],[.20,.25,.18]); eyes(head,.035,.172,.10,.033);
   if(kind==='chef') {

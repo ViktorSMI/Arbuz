@@ -22,6 +22,7 @@ try {
     playText: document.getElementById('btn-play')?.textContent?.trim(),
     canvasCount: document.querySelectorAll('canvas').length,
     bootFailed: document.body.textContent?.includes('Мир не пророс') ?? false,
+    models: window.__ARBZ_MODEL_ASSETS__ ?? null,
   }));
 
   if (pageErrors.length) {
@@ -30,6 +31,7 @@ try {
   if (result.bootFailed) throw new Error('The local boot error screen is visible');
   if (!result.playText) throw new Error('The play button was not rendered');
   if (result.canvasCount < 1) throw new Error('The Three.js canvas was not created');
+  if (!result.models?.ready || result.models.models < 16) throw new Error(`GLB model pack did not load: ${JSON.stringify(result.models)}`);
 
   console.log(`Local file smoke test passed: ${result.title}; ${result.canvasCount} canvas element(s)`);
 } finally {

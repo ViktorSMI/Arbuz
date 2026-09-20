@@ -1,0 +1,61 @@
+name: Validate GLB main integration
+
+on:
+  push:
+    branches: [work/glb-main-integration]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: glb-main-integration
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Check source, model assets, cape integration and build
+        run: npm run check && npm test && npm run build
+      - name: Validate autonomous browser bundle
+        run: |
+          node --check js/game.bundle.js
+          test -s js/game.bundle.js
+          git diff --check
+          test -s assets/models/hero_arbuzilla.glb
+          test -s assets/models/prop_orchard_tree.glb
+      - name: Verify direct local launch
+        run: npm run smoke:local
+      - name: Verify gameplay, six lands and authored models
+        run: npm run smoke:art
+      - name: Archive integration evidence
+        if: always()
+        run: |
+          mkdir -p /tmp/glb-main-integration
+          tar --exclude=.git --exclude=node_modules --exclude=test-results --exclude='.github/workflows/glb-main-integration.yml' -czf /tmp/glb-main-integration/browser-source.tar.gz .
+          cp -R test-results /tmp/glb-main-integration/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: glb-main-integration-review
+          path: /tmp/glb-main-integration/
+          retention-days: 7
+      - name: Commit validated standalone bundle
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add js/game.bundle.js package-lock.json
+          if git diff --cached --quiet; then
+            echo "Standalone bundle is current"
+          else
+            git commit -m "build: refresh integrated GLB world bundle"
+            git push origin HEAD:work/glb-main-integration
+          fi

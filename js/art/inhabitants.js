@@ -4,6 +4,7 @@ import { organicGeometry, seedGeometry, branchGeometry, sculpt } from './sculpt.
 import { part, pivot, leaf, link, tube, ring, collectStatic } from './geometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ART_VERSION } from './palette.js';
+import { cloneModelNode, modelAssetReady, modelNodes } from './model-assets.js';
 
 export const RESIDENT_NAMES=Object.freeze(['Мудрый Кактус','Старый Тыквос','Грибочек','Морковка-ведунья','Баклажан-торговец']);
 const twoSided={side:THREE.DoubleSide};
@@ -50,19 +51,33 @@ export function createResident(name) {
   const root=new THREE.Group();root.name=`resident-${index}`;
   root.userData.artVersion=ART_VERSION;root.userData.residentIndex=index;
   const hip=pivot(root,'resident-hip',[0,.79,0]);root.userData.hip=hip;
+  const keys=['resident_cactus','resident_pumpkin','resident_mushroom','resident_carrot','resident_eggplant'];
+  const assetKey=keys[index], authored=modelAssetReady(assetKey);
   const mats=['cactus','pumpkin','bone','carrot','aubergine'];
   const skin=material(mats[index]).clone();skin.userData.sharedArtMaterial=false;
-  const body=sculpt(hip,organicGeometry({lobes:index===1?10:8,depth:index===1?.11:index===0?.06:.015,taper:index===3?-.48:index===4?.24:0,bend:index===4?.12:0}),skin);
-  root.userData.body=body;
-  const bronze=material('gold'),cloth=material('cloth',index===3?'#c3a6cd':'#d2baa3',twoSided);
   const size=[[.37,.87,.34],[.67,.60,.58],[.24,.63,.24],[.34,.79,.32],[.49,.79,.42]][index];
-  body.scale.fromArray(size);body.position.y=index===0?.36:index===1?.17:.29;
-  const eyeY=index===0?.65:index===1?.3:.53,eyeZ=size[2]*.91;
-  root.userData.eyes=eyes(hip,eyeY,eyeZ,index===0||index===2?.14:.19,body);
+  const body=authored
+    ? cloneModelNode(assetKey,'body')
+    : sculpt(hip,organicGeometry({lobes:index===1?10:8,depth:index===1?.11:index===0?.06:.015,taper:index===3?-.48:index===4?.24:0,bend:index===4?.12:0}),skin);
+  if(authored){hip.add(body);root.userData.modelAsset=`${assetKey}.glb`;}
+  root.userData.body=body;
+  if(!authored){body.scale.fromArray(size);body.position.y=index===0?.36:index===1?.17:.29;}
+  const bronze=material('gold'),cloth=material('cloth',index===3?'#c3a6cd':'#d2baa3',twoSided);
+  if(authored) {
+    root.userData.eyes=[];
+    for(const side of ['L','R']) {
+      const eye=cloneModelNode(assetKey,`eye_${side}`); if(eye){hip.add(eye);root.userData.eyes.push(eye);}
+    }
+  } else {
+    const eyeY=index===0?.65:index===1?.3:.53,eyeZ=size[2]*.91;
+    root.userData.eyes=eyes(hip,eyeY,eyeZ,index===0||index===2?.14:.19,body);
+  }
   for(const [s,side] of [[-1,'L'],[1,'R']]) {
     const arm=pivot(hip,`resident-arm${side}`,[s*(size[0]*.82),.24,0]);
     root.userData[`arm${side}`]=arm;
-    if(index===0) {
+    if(authored) {
+      const modelArm=cloneModelNode(assetKey,'arm'); if(modelArm){modelArm.scale.x*=s;arm.add(modelArm);}
+    } else if(index===0) {
       sculpt(arm,branchGeometry([[0,0,0],[s*.30,.02,0],[s*.38,.24,0],[s*.36,.60,0]],.13,.08,12,8),skin);
       part(arm,skin,[s*.36,.60,0],[.083,.10,.083]);
     } else {
@@ -71,11 +86,19 @@ export function createResident(name) {
       part(arm,bronze,[s*.25,-.29,.14],[.071,.067,.065]);
     }
     const leg=pivot(hip,`resident-leg${side}`,[s*(index===2?.14:.18),-.18,0]);root.userData[`leg${side}`]=leg;
-    link(leg,material('bark'),[0,0,0],[0,-.51,0],.09,.065);
-    part(leg,material('bark','#c6b28c'),[0,-.55,.1],[.14,.075,.23]);
+    if(authored) {
+      const modelLeg=cloneModelNode(assetKey,'leg'); if(modelLeg)leg.add(modelLeg);
+    } else {
+      link(leg,material('bark'),[0,0,0],[0,-.51,0],.09,.065);
+      part(leg,material('bark','#c6b28c'),[0,-.55,.1],[.14,.075,.23]);
+    }
   }
-  if(index===0) {
-    // Cactus needles are grouped rather than separate draws.
+  if(authored) {
+    const skip=new Set(['body','eye_L','eye_R','arm','leg']);
+    for(const node of modelNodes(assetKey)) if(!skip.has(node)) {
+      const extra=cloneModelNode(assetKey,node); if(extra)hip.add(extra);
+    }
+  } else if(index===0) {
     const needles=new THREE.Group();
     for(let row=0;row<6;row++)for(let j=0;j<8;j++) {
       const a=j/8*Math.PI*2,y=-.20+row*.21;
@@ -90,7 +113,7 @@ export function createResident(name) {
   } else if(index===1) {
     sculpt(hip,branchGeometry([[0,.70,0],[.06,.88,.01],[.2,1.0,0],[.25,.91,0]],.10,.045,8,7),material('bark'));
     const collar=ring(hip,cloth,.49,.09,[0,.63,0]);collar.rotation.x=Math.PI/2;collar.scale.z=.8;
-    const pack=part(hip,material('cloth','#ad9a7b'),[0,.23,-.51],[.36,.34,.15]);
+    part(hip,material('cloth','#ad9a7b'),[0,.23,-.51],[.36,.34,.15]);
     for(const s of [-1,1])tube(hip,bronze,[[s*.24,.57,-.45],[s*.29,.30,-.64],[s*.22,-.1,-.56]],.024,8);
     const stick=pivot(root,'walking-stick',[-.82,0,.22]);staff(stick);
   } else if(index===2) {
@@ -116,13 +139,13 @@ export function createResident(name) {
       calyx.position.set(0,1.03,0);calyx.rotation.set(2.1,f*Math.PI/3,0);
     }
     sculpt(hip,branchGeometry([[0,.95,0],[.04,1.19,0],[.20,1.23,0]],.075,.027,7,7),material('bark'));
-    const satchel=part(hip,material('bark','#e0c39f'),[-.40,-.10,.30],[.28,.21,.12]);
+    part(hip,material('bark','#e0c39f'),[-.40,-.10,.30],[.28,.21,.12]);
     part(hip,bronze,[-.40,-.06,.427],[.05,.04,.016],'box');
     tube(hip,cloth,[[-.35,-.1,.36],[-.03,.44,.4],[.18,.86,.12]],.05,12);
     for(let f=0;f<3;f++)part(hip,glow('#abc790',.15),[-.51+f*.11,.14,.29],[.044,.07,.045]);
   }
   const marker=new THREE.Group();marker.position.y=2.65;
-  const seal=sculpt(marker,seedGeometry(.24,.06,.02,.016),glow('#d9c789',.55));
+  sculpt(marker,seedGeometry(.24,.06,.02,.016),glow('#d9c789',.55));
   ring(marker,bronze,.19,.009,[0,.12,-.005]);root.add(marker);
   root.userData.questMarker=marker;root.userData.questMarkerHeight=2.65;
   return root;
