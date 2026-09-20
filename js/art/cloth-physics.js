@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export const CLOTH_PHYSICS_VERSION = 'cape-verlet-1';
+export const CLOTH_PHYSICS_VERSION = 'cape-verlet-2';
 
 const STEP = 1 / 60;
 const MAX_STEPS = 4;
@@ -41,26 +41,45 @@ function addConstraint(state, a, b, stiffness) {
   state.constraints.push({ a, b, length: pointDistance(state.rest, a, b), stiffness });
 }
 
-function createState(mesh) {
-  const position = mesh.geometry.attributes.position;
-  const uv = mesh.geometry.attributes.uv;
-  if (!position || !uv || position.count !== uv.count) return null;
+function topologyFromUv(position, uv) {
+  if (!uv || position.count !== uv.count) return null;
   const us = axisValues(uv, (attribute, i) => attribute.getX(i));
   const vs = axisValues(uv, (attribute, i) => attribute.getY(i), true);
   const columns = us.length;
   const rows = vs.length;
   if (columns * rows !== position.count || columns < 2 || rows < 2) return null;
-
   const grid = new Array(position.count);
   for (let i = 0; i < uv.count; i++) {
     grid[nearest(vs, uv.getY(i)) * columns + nearest(us, uv.getX(i))] = i;
   }
+  if (grid.some(index => index === undefined)) return null;
+  return { columns, rows, grid, source: 'uv-grid' };
+}
+
+function topologyFromRows(position) {
+  const ys = axisValues(position, (attribute, i) => attribute.getY(i), true);
+  if (ys.length < 2) return null;
+  const rowLists = Array.from({ length: ys.length }, () => []);
+  for (let i = 0; i < position.count; i++) rowLists[nearest(ys, position.getY(i))].push(i);
+  const columns = rowLists[0]?.length || 0;
+  if (columns < 2 || rowLists.some(row => row.length !== columns)) return null;
+  for (const row of rowLists) row.sort((a, b) => position.getX(a) - position.getX(b));
+  return { columns, rows: rowLists.length, grid: rowLists.flat(), source: 'position-rows' };
+}
+
+function createState(mesh) {
+  const position = mesh.geometry.attributes.position;
+  if (!position) return null;
+  const topology = topologyFromUv(position, mesh.geometry.attributes.uv) || topologyFromRows(position);
+  if (!topology || topology.columns * topology.rows !== position.count) return null;
+  const { columns, rows, grid } = topology;
   const rest = new Float32Array(position.array);
   const state = {
     mesh,
     columns,
     rows,
     grid,
+    topology: topology.source,
     rest,
     current: new Float32Array(rest),
     previous: new Float32Array(rest),
@@ -288,6 +307,7 @@ export function simulateCape(mesh, root, dt, time = 0, options = {}) {
     pinned: state.pinned.reduce((sum, value) => sum + value, 0),
     maxStretch: state.maxStretch,
     collisionCorrections: state.collisionCorrections,
+    topology: state.topology,
     anchorZ: mesh.parent?.position.z ?? 0,
   };
   return state;

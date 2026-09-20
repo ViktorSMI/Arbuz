@@ -24,7 +24,7 @@ test('authored GLB hero keeps the physical cape outside the rind while running a
   const cape=hero.userData.cloth?.[0];
   assert(cape?.isMesh,'GLB cape mesh was not registered');
   assert.equal(cape.userData.modelAssetKey,'hero');
-  assert(cape.geometry.attributes.uv?.count===cape.geometry.attributes.position.count,'GLB cape needs a regular UV grid');
+  assert.equal(cape.geometry.attributes.position.count,143,'unexpected authored cape topology');
 
   const hip=hero.userData.joints.hip;
   for(let frame=0;frame<210;frame++){
@@ -40,6 +40,7 @@ test('authored GLB hero keeps the physical cape outside the rind while running a
   }
 
   assert.equal(hero.userData.capePhysics.version,CLOTH_PHYSICS_VERSION);
+  assert.equal(cape.userData.clothPhysics.topology,'position-rows');
   assert(hero.userData.joints.cape.position.z<=-.76,'cape collar remained inside the GLB rind');
   assert(hero.userData.capePhysics.maxStretch<1.38,hero.userData.capePhysics.maxStretch);
   assert(hero.userData.capePhysics.constraints>cape.geometry.attributes.position.count*3);
