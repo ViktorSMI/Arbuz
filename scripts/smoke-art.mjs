@@ -46,7 +46,7 @@ try{
   await page.locator('a[href="index3d.html"]').first().click();await ready();checks.push('launcher link opens the local game');
   await page.goto('about:blank');
   await page.goto(url,{timeout:30000});await ready();await page.waitForFunction(()=>Boolean(window.__arbuzReview));await snap('01-menu');
-  assert.equal((await inspect()).art,'orchard-2');checks.push('offline boot and hero');
+  const opening=await inspect();assert.equal(opening.art,'orchard-2');assert(opening.models.ready&&opening.models.models>=16);checks.push('offline boot, GLB model pack and hero');
   await page.locator('#btn-play').click();await page.waitForFunction(()=>document.body.dataset.gameState==='playing');
   // Functional input checks use the low preset on a software-rendered runner.
   await page.keyboard.press('Escape');await page.waitForSelector('#settings-panel',{state:'visible'});
@@ -77,16 +77,20 @@ try{
   for(let i=0;i<6;i++){
     await page.evaluate(i=>window.__arbuzReview.biome(i),i);
     await page.waitForFunction(i=>window.__arbuzReview.inspect().world.biome===i,i);
-    const report=await inspect();assert.equal(report.world.biome,i);assert(report.world.grass>1000);
+    const report=await inspect();assert.equal(report.world.biome,i);assert(report.world.grass>1000);assert(report.world.modelDetails>250);
     assert(report.render.calls>0&&report.render.calls<9000);assert(report.render.triangles>0&&report.render.triangles<3000000);
     biomes.push(report);progress();await snap(`land-${i+1}`);
   }
   checks.push('six biome transitions with bounded draw/triangle counts');
   for(const [kind,index,file] of [['hero',0,'hero'],['Жук-солдат',0,'beetle'],['Крыса-мутант',0,'rat'],['Голубь-бомбер',0,'bird'],...Array.from({length:6},(_,i)=>['guardian',i,`guardian-${i+1}`])]){
-    const data=await page.evaluate(([kind,index])=>window.__arbuzReview.show(kind,index),[kind,index]);assert(data.joints.length>0);
+    const data=await page.evaluate(([kind,index])=>window.__arbuzReview.show(kind,index),[kind,index]);assert(data.joints.length>0);if(['hero','Жук-солдат','Крыса-мутант','Голубь-бомбер'].includes(kind))assert(data.modelAsset,`${kind} did not use a GLB model`);
     await page.waitForTimeout(180);await snap(file);
   }
-  await page.evaluate(()=>window.__arbuzReview.close());checks.push('hero, enemy and guardian rendering');
+  for(let i=0;i<5;i++){
+    const resident=await page.evaluate(i=>window.__arbuzReview.show('resident',i),i);
+    assert(resident.modelAsset,`resident ${i} did not use a GLB model`);
+  }
+  await page.evaluate(()=>window.__arbuzReview.close());checks.push('hero, enemy, resident and guardian GLB rendering');
   assert.equal(external.length,0,'Local play attempted network requests');
   assert.deepEqual(errors,[],'Browser or shader errors');
   await page.reload();await ready();await page.locator('#btn-continue').click();await page.waitForFunction(()=>document.body.dataset.gameState==='playing');checks.push('continue after reload');

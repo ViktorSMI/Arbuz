@@ -60,7 +60,7 @@ export function ring(parent, mat, radius, tubeRadius, pos = [0, 0, 0]) {
 
 export function disposeRig(root) {
   const geometries = new Set(), mats = new Set();
-  root.traverse(o => { if (o.geometry && ![...shapes.values()].includes(o.geometry)) geometries.add(o.geometry);
+  root.traverse(o => { if (o.geometry && !o.geometry.userData.sharedModelAsset && ![...shapes.values()].includes(o.geometry)) geometries.add(o.geometry);
     if (o.isInstancedMesh) o.dispose();
     if (o.material) for (const mat of Array.isArray(o.material) ? o.material : [o.material]) if (!mat.userData.sharedArtMaterial) mats.add(mat);
   });

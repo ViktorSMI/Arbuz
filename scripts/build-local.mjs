@@ -17,6 +17,7 @@ await build({
   target: ['es2020'],
   loader: {
     '.html': 'text',
+    '.glb': 'base64',
   },
   charset: 'utf8',
   legalComments: 'none',

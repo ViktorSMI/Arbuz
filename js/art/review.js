@@ -7,6 +7,7 @@ import { disposeRig } from './geometry.js';
 import { worldStats } from '../world.js';
 import { materialStats, material } from './materials.js';
 import { createResident, RESIDENT_NAMES } from './inhabitants.js';
+import { modelAssetStats } from './model-assets.js';
 
 export function createReviewBridge(callbacks) {
   let actor=null, hidden=[], pedestal=null, state='idle', oldBackground=null,oldView=null;
@@ -31,12 +32,12 @@ export function createReviewBridge(callbacks) {
     pedestal.position.set(centre.x,box.min.y-.08,centre.z);pedestal.receiveShadow=true;scene.add(pedestal);
     scene.background=new THREE.Color('#273c38');
     document.getElementById('game-root').style.visibility='hidden';
-    return {kind,index,joints:Object.keys(actor.userData.joints||{hip:actor.userData.hip}),size:size.toArray()};
+    return {kind,index,joints:Object.keys(actor.userData.joints||{hip:actor.userData.hip}),size:size.toArray(),modelAsset:actor.userData.modelAsset||actor.userData.body?.userData.modelAssetArchetype||actor.userData.visual?.userData.body?.userData.modelAssetArchetype||null};
   }
   if(location.hash==='#art-review') window.__arbuzReview={
     ...callbacks,
     show,close,pose:value=>{state=value;},
-    inspect:()=>({...callbacks.read(),world:worldStats(),materials:materialStats(),render:{calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures}}),
+    inspect:()=>({...callbacks.read(),world:worldStats(),models:modelAssetStats(),materials:materialStats(),render:{calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures}}),
   };
   return {tick(dt){if(!actor)return false;if(actor.userData.joints)animatorFor(actor.userData.visual||actor).update(dt,state);return true;}};
 }
