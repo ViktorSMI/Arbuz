@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { clamp01 } from './palette.js';
+import { secondaryMotion, groundHero } from './motion.js';
 
 const controllers = new WeakMap();
 const clipCache = new Map();
@@ -129,9 +130,7 @@ export class RigAnimator {
     this.actions[this.state].setEffectiveTimeScale(speed);
     this.mixer.update(dt);
     const joints=this.root.userData.joints;
-    if(joints.cape) { joints.cape.rotation.x=-.1+Math.sin(this.time*3.2)*.045+(state==='run'?.45:0); joints.cape.rotation.z=Math.sin(this.time*2.1)*.06; }
-    if(joints.stem) joints.stem.rotation.z=Math.sin(this.time*2.5)*.075;
-    if(joints.tail) joints.tail.rotation.y=Math.sin(this.time*3.4)*.2;
+    secondaryMotion(this.root, dt, state, state==='run'?1.5:state==='walk'?.6:0, this.time);
     this.root.userData.animationState=this.state;
   }
   dispose() { this.mixer.stopAllAction(); this.mixer.uncacheRoot(this.root); }
@@ -146,7 +145,9 @@ export function animateHero(root,dt,p,movement={}) {
   if(p.grounded&&!anim.previousGrounded&&p.alive&&!p.dodging) anim.landUntil=anim.time+.18;
   if((anim.landUntil||0)>anim.time && ['idle','walk','run'].includes(state)) state='land';
   anim.previousGrounded=p.grounded||movement.menu;
-  anim.update(dt,state,movement.sprinting?1.12:1);
+  const cadence = ['walk','run'].includes(state) ? (movement.sprinting ? 1.45 : 1.18) : 1;
+  anim.update(dt,state,cadence);
+  groundHero(root, dt, p, movement);
   root.userData.body.material.emissive.set('#cd5b3b');
   root.userData.body.material.emissiveIntensity=Math.max(0,p.dmgFlash||0)*2;
   if(root.userData.sword) root.userData.sword.visible=!p.dodging;

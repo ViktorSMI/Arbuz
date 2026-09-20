@@ -1,5 +1,5 @@
 // Art direction follows the six existing lands. No runtime downloads.
-export const ART_VERSION = 'orchard-1';
+export const ART_VERSION = 'orchard-2';
 export const LAND_STYLES = Object.freeze([
   { name: 'Зелёные холмы', ground: '#555c36', foliage: '#607347', stone: '#8e9982', fog: '#a8b5a1', sky: '#758c8b', light: '#ffe3ae', accent: '#e7c779', cloth: '#733a36', prop: 'orchard' },
   { name: 'Подземелья крыс', ground: '#474344', foliage: '#655752', stone: '#7c7273', fog: '#645f70', sky: '#363547', light: '#dec7a0', accent: '#b7a3d5', cloth: '#595170', prop: 'tunnels' },

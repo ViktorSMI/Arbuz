@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { part, pivot, tube, link, leaf, ring } from './geometry.js';
 import { material, glow } from './materials.js';
+import { organicGeometry, seedGeometry, sculpt } from './sculpt.js';
+import { ART_VERSION } from './palette.js';
 
 const twoSided = { side: THREE.DoubleSide };
 const unique = base => { const mat=base.clone(); mat.userData.sharedArtMaterial=false; return mat; };
@@ -10,6 +12,9 @@ function eyes(parent, y, z, x = .24, size = .075, tint = '#e5c77b') {
     part(parent, material('iron', '#465552'), [s*x, y, z], [size*2.1, size*.85, size*.55]);
     const eye = part(parent, glow(tint, .85), [s*x, y, z+.035], [size*1.35, size*.36, size*.45]);
     eye.rotation.z = s * -.12;
+    eye.userData.openScale = eye.scale.y;
+    const owner = parent.userData.rigRoot;
+    if (owner) (owner.userData.eyes ||= []).push(eye);
   }
 }
 function banner(parent, mat, length, width) {
@@ -22,6 +27,10 @@ function banner(parent, mat, length, width) {
   }
   geo.computeVertexNormals();
   const mesh=new THREE.Mesh(geo,mat); mesh.castShadow=mesh.receiveShadow=true;
+  mesh.userData.clothRest = new Float32Array(pos.array);
+  mesh.userData.clothLength = length;
+  const owner = parent.userData.rigRoot;
+  if (owner) (owner.userData.cloth ||= []).push(mesh);
   parent.add(mesh); return mesh;
 }
 function seedSword(hand, large = false, offset = [0,-.29,.03]) {
@@ -29,7 +38,7 @@ function seedSword(hand, large = false, offset = [0,-.29,.03]) {
   const iron=material('iron'), gold=material('gold');
   link(sword, material('bark'), [0,-.14,0], [0,.2,0], .065);
   const guard=leaf(sword,gold,.42,.095,.04); guard.rotation.z=-Math.PI/2; guard.position.x=-.21; guard.position.y=.15;
-  const blade=leaf(sword,material('iron','#bfcfc3',twoSided),large?1.65:1.12,.16,.04); blade.position.y=.2;
+  const blade=sculpt(sword, seedGeometry(large?1.65:1.12,.15,.055,.025), material('iron','#dce6d7')); blade.position.y=.2;
   const ridge=leaf(sword,material('gold','#d3d1b1',twoSided),large?1.55:1.02,.026,.03); ridge.position.set(0,.24,.055);
   part(sword,glow('#c4c98b',.3),[0,-.2,0],[.08,.13,.055]);
   sword.rotation.x=2.05;
@@ -37,18 +46,18 @@ function seedSword(hand, large = false, offset = [0,-.29,.03]) {
 }
 function rootRig(kind) {
   const root=new THREE.Group(); root.name=`orchard-${kind}`;
-  root.userData.artVersion='orchard-1'; root.userData.kind=kind;
+  root.userData.artVersion=ART_VERSION; root.userData.kind=kind;
   root.userData.joints={};
   return root;
 }
 function joint(root,parent,name,pos) {
-  const j=pivot(parent,name,pos); root.userData.joints[name]=j; return j;
+  const j=pivot(parent,name,pos); j.userData.rigRoot=root; root.userData.joints[name]=j; return j;
 }
 
 export function createHero() {
   const root=rootRig('hero'), vine=material('bark','#abb687'), bronze=material('gold'), cloth=material('cloth','#e0b8a4',twoSided);
   const hip=joint(root,root,'hip',[0,1.17,0]);
-  const body=part(hip,skin(),[0,0,0],[.73,.81,.66]);
+  const body=sculpt(hip,organicGeometry({lobes:10,depth:.018,taper:.055}),skin(),[0,0,0],[.73,.81,.66]);
   body.name='rind'; root.userData.body=body;
   // Carved seed-mask and a healed scar, rather than white toy eyeballs.
   eyes(hip,.22,.617,.23,.082);
@@ -61,20 +70,28 @@ export function createHero() {
   // Shoulder shells, vine joints, stitched wrist wraps.
   for (const [s,side] of [[-1,'L'],[1,'R']]) {
     const arm=joint(root,hip,`arm${side}`,[s*.72,.10,0]);
-    const pauldron=leaf(arm,material('gold','#c0b583',twoSided),.45,.27,.12);
-    pauldron.rotation.z=-s*1.2; pauldron.position.set(s*.06,.14,0);
+    // Overlapping lames cover the shoulder joint instead of floating beside it.
+    for (let i=0;i<2;i++) {
+      const plate=sculpt(arm,seedGeometry(.40-i*.05,.21,.11,.026),material('chitin','#cad2ad'));
+      plate.position.set(s*(.045+i*.035),-.24-i*.13,.04+i*.025);
+      plate.rotation.z=-s*.24;
+      tube(arm,bronze,[[s*.02,-.19-i*.13,.16],[s*.19,-.14-i*.13,.16],[s*.23,-.01-i*.13,.09]],.012,6);
+    }
     link(arm,vine,[0,0,0],[s*.055,-.32,0],.095,.075);
     const elbow=joint(root,arm,`elbow${side}`,[s*.055,-.32,0]);
     link(elbow,vine,[0,0,0],[0,-.29,.045],.085,.07);
     part(elbow,cloth,[0,-.19,.025],[.105,.1,.095]);
     const wrist=joint(root,elbow,`wrist${side}`,[0,-.32,.055]);
-    part(wrist,bronze,[0,0,0],[.1,.105,.1]);
+    part(wrist,material('bark','#b9aa89'),[0,0,0],[.1,.105,.1]);
+    for (let f=0;f<3;f++) part(wrist,bronze,[(f-1)*.053,-.07,.058],[.023,.067,.028]);
     const leg=joint(root,hip,`leg${side}`,[s*.29,-.5,0]);
     link(leg,vine,[0,0,0],[s*.025,-.29,0],.12,.10);
     const knee=joint(root,leg,`knee${side}`,[s*.025,-.29,0]);
     link(knee,vine,[0,0,0],[0,-.24,.015],.105,.075);
     part(knee,bronze,[0,-.04,.08],[.12,.16,.06]);
-    const foot=part(knee,material('bark'),[0,-.26,.13],[.17,.09,.27]);
+    const ankle=joint(root,knee,`ankle${side}`,[0,-.24,.015]);
+    const foot=part(ankle,material('bark','#c1b293'),[0,-.02,.12],[.17,.09,.27]);
+    for(let wrap=0;wrap<3;wrap++) tube(ankle,cloth,[[-.14,-.025,.02+wrap*.065],[0,.065,.02+wrap*.065],[.14,-.025,.02+wrap*.065]],.018,6);
     root.userData[`shoe${side}`]=foot;
   }
   const stem=joint(root,hip,'stem',[0,.78,0]);
@@ -87,9 +104,12 @@ export function createHero() {
   banner(cape,cloth,1.2,1.25);
   // Worn strap follows the body instead of an equatorial ring.
   tube(hip,material('bark','#c7b9a0'),[[-.45,.59,.25],[-.23,.35,.62],[.09,0,.66],[.38,-.43,.40]],.045);
-  const shield=leaf(root.userData.joints.elbowL,material('chitin','#c8c997',twoSided),.66,.29,.12);
+  const shield=sculpt(root.userData.joints.elbowL,seedGeometry(.70,.29,.12,.035),material('chitin','#bccb9d'));
   shield.position.set(-.10,-.52,.12); shield.rotation.z=-.16;
-  const emblem=leaf(root.userData.joints.elbowL,bronze,.30,.055,.025); emblem.position.set(-.1,-.33,.25);
+  const emblem=sculpt(root.userData.joints.elbowL,seedGeometry(.3,.05,.02,.008),bronze); emblem.position.set(-.1,-.36,.27);
+  for(const sign of [-1,1]) tube(hip,cloth,[[sign*.08,.56,-.44],[sign*.32,.38,-.57],[sign*.50,.1,-.5]],.047,9);
+  const pouch=part(hip,material('bark','#c1ad81'),[.54,-.39,-.34],[.15,.19,.10]);
+  part(hip,bronze,[.54,-.35,-.435],[.046,.025,.012],'box');
   root.userData.sword=seedSword(root.userData.joints.wristR,false,[0,-.03,.03]);
   root.userData.armL=root.userData.joints.armL; root.userData.armR=root.userData.joints.armR;
   root.userData.legL=root.userData.joints.legL; root.userData.legR=root.userData.joints.legR;
@@ -99,7 +119,7 @@ export function createHero() {
 function insect(kind, boss = false) {
   const root=rootRig(kind), chitin=material('chitin',boss?'#bec389':'#c3cfb5'), dark=material('iron','#869288'), gold=material('gold');
   const hip=joint(root,root,'hip',[0,.58,0]);
-  const body=part(hip,unique(chitin),[0,0,-.12],[.52,.38,.73]); root.userData.body=body;
+  const body=sculpt(hip,organicGeometry({lobes:8,depth:.04,rings:18,sides:28}),unique(chitin),[0,0,-.12],[.52,.38,.73]); root.userData.body=body;
   const ant=kind==='ant', roach=kind==='roach', mantis=kind==='mantis';
   body.scale.set(ant?.26:.52,mantis?.24:.38,ant?.4:.73);
   if (ant) part(hip,chitin,[0,-.04,-.78],[.34,.32,.44]);
@@ -113,8 +133,9 @@ function insect(kind, boss = false) {
   // Two articulated elytra with an inset seam and engraved edge.
   if (!ant && !mantis) for (const [s,side] of [[-1,'L'],[1,'R']]) {
     const wing=joint(root,hip,`shell${side}`,[s*.05,.17,-.13]);
-    const plate=part(wing,chitin,[s*.23,.07,0],[.29,roach?.17:.28,.68]);
+    const plate=sculpt(wing,organicGeometry({lobes:7,depth:.05,rings:16,sides:28}),chitin,[s*.23,.07,0],[.29,roach?.17:.28,.68]);
     plate.rotation.z=s*-.18;
+    for(let rib=0;rib<4;rib++) tube(wing,dark,[[s*.15,.26,-.42+rib*.23],[s*.28,.32,-.40+rib*.23],[s*.40,.20,-.37+rib*.23]],.009,5);
     tube(wing,gold,[[s*.24,.1,-.58],[s*.47,.1,-.2],[s*.41,.12,.3],[s*.12,.13,.62]],.018);
   }
   for (let i=0;i<3;i++) for (const [s,side] of [[-1,'L'],[1,'R']]) {
@@ -196,6 +217,7 @@ function quadruped(kind, boss = false) {
   }
   const tail=joint(root,hip,'tail',[0,.02,-.63]);
   tube(tail,kind==='cat'?fur:material('cloth','#bdaca0'),[[0,0,0],[.13,.08,-.32],[.33,.25,-.60],[.44,.45,-.73]],kind==='cat'?.08:.045);
+  for(const side of [-1,1]) for(let w=0;w<3;w++) link(head,material('bone','#c5bdae'),[side*.13,-.07,.30],[side*(.36+w*.04),-.02+w*.07,.30+w*.035],.006,.002);
   if(kind==='rat') {
     for(let i=0;i<3;i++) part(hip,material('chitin','#b6c38c'),[.27,.25-i*.08,-.36+i*.18],[.12,.16,.14],'stone');
   }

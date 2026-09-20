@@ -1,3 +1,4 @@
+import { createContactShadows } from './art/contact-shadows.js';
 import { createReviewBridge } from './art/review.js';
 import { interfaceState, setupInterface, showJournal, closeJournal, updateMission, skillIcon } from './art/interface.js';
 import { setBloomEnabled } from './postprocessing.js';
@@ -304,6 +305,7 @@ document.querySelectorAll('.skill-slot').forEach((slot, i) => {
     keysJustPressed[['KeyQ','KeyF','KeyC','Digit1','Digit2','Digit3','Digit4'][i]] = true;
   });
 });
+const contactShadows = createContactShadows(scene, getTerrainHeight);
 const clock = new THREE.Clock();
 
 function update() {
@@ -357,6 +359,7 @@ function update() {
   // День/ночь (работает всегда)
   updateDayNight(dt, dayNightRefs);
   updateWorld(dt, player.pos, gameLocation - 1, getTimeOfDay());
+  contactShadows.update(player, enemies, npcs, bossState.bossObj);
   const timeIndicator = document.getElementById('time-indicator');
   if (timeIndicator) {
     const t = getTimeOfDay();
@@ -882,7 +885,7 @@ function update() {
   playerMesh.position.copy(player.pos);
   const visualYaw = player.dodging ? Math.atan2(player.dodgeDir.x, player.dodgeDir.z) : player.yaw + Math.PI;
   playerMesh.rotation.set(0, visualYaw, 0);
-  animateHero(playerMesh, dt, player, { moving, sprinting, inWater,
+  animateHero(playerMesh, dt, player, { moving, sprinting, inWater, getHeight: getTerrainHeight,
     casting: ['KeyQ','KeyF','KeyC','Digit1','Digit2','Digit3','Digit4'].some(k => keysJustPressed[k]) });
   if (player.grounded && player._wasAirborne) { sfxLand(Math.min(1, Math.abs(player._prevVelY || 0) / 12)); }
   player._wasAirborne = !player.grounded;

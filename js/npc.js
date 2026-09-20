@@ -1,3 +1,5 @@
+import { createResident, animateResident } from './art/inhabitants.js';
+import { disposeRig } from './art/geometry.js';
 import * as THREE from 'three';
 import { WORLD_SIZE, WATER_LEVEL } from './constants.js';
 import { scene } from './scene.js';
@@ -76,70 +78,7 @@ const NPC_DEFS = [
 
 export const npcs = [];
 
-function createNpcMesh(def) {
-  const g = new THREE.Group();
-  const bodyGeo = new THREE.CylinderGeometry(0.5, 0.6, 1.6, 8);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.6 });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.position.y = 1.3; body.castShadow = true;
-  g.add(body); g.userData.body = body;
-
-  const headGeo = new THREE.SphereGeometry(0.45, 10, 8);
-  const headMat = new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.5 });
-  const head = new THREE.Mesh(headGeo, headMat);
-  head.position.y = 2.5; head.castShadow = true;
-  g.add(head);
-
-  const hatGeo = new THREE.ConeGeometry(0.5, 0.7, 8);
-  const hatMat = new THREE.MeshStandardMaterial({ color: def.hatColor, roughness: 0.4 });
-  const hat = new THREE.Mesh(hatGeo, hatMat);
-  hat.position.y = 3.1; hat.castShadow = true;
-  g.add(hat);
-
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-  const pupilMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-  for (let s = -1; s <= 1; s += 2) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), eyeMat);
-    eye.position.set(s * 0.18, 2.6, 0.38);
-    g.add(eye);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.05, 5, 5), pupilMat);
-    pupil.position.set(s * 0.18, 2.6, 0.45);
-    g.add(pupil);
-  }
-
-  const armGeo = new THREE.CylinderGeometry(0.08, 0.06, 0.6, 5);
-  const armMat = new THREE.MeshStandardMaterial({ color: def.color });
-  const armL = new THREE.Mesh(armGeo, armMat);
-  armL.position.set(-0.65, 1.5, 0); armL.rotation.z = 0.3;
-  g.add(armL); g.userData.armL = armL;
-  const armR = new THREE.Mesh(armGeo, armMat);
-  armR.position.set(0.65, 1.5, 0); armR.rotation.z = -0.3;
-  g.add(armR); g.userData.armR = armR;
-
-  const legGeo = new THREE.CylinderGeometry(0.1, 0.12, 0.5, 5);
-  const legMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(def.color).multiplyScalar(0.7).getHex() });
-  const legL = new THREE.Mesh(legGeo, legMat);
-  legL.position.set(-0.2, 0.25, 0);
-  g.add(legL); g.userData.legL = legL;
-  const legR = new THREE.Mesh(legGeo, legMat);
-  legR.position.set(0.2, 0.25, 0);
-  g.add(legR); g.userData.legR = legR;
-
-  const excMat = new THREE.MeshStandardMaterial({ color: 0xfdd835, emissive: 0xfdd835, emissiveIntensity: 0.5 });
-  const exclamation = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), excMat);
-  exclamation.position.y = 3.8;
-  g.add(exclamation);
-  g.userData.questMarker = exclamation;
-
-  const sh = new THREE.Mesh(
-    new THREE.CircleGeometry(0.5, 10),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 })
-  );
-  sh.rotation.x = -Math.PI / 2; sh.position.y = 0.05;
-  g.add(sh);
-
-  return g;
-}
+function createNpcMesh(def) { return createResident(def.name); }
 
 export function spawnNpcs() {
   clearNpcs();
@@ -181,7 +120,7 @@ export function spawnNpcs() {
 
 export function clearNpcs() {
   for (const n of npcs) {
-    if (n.mesh) scene.remove(n.mesh);
+    if (n.mesh) disposeRig(n.mesh);
   }
   npcs.length = 0;
 }
@@ -350,14 +289,13 @@ export function updateNpcs(dt) {
     }
 
     n.mesh.position.set(n.x, n.y, n.z);
-    n.mesh.rotation.y = n.facing;
+    animateResident(n.mesh, dt, n, dist);
 
-    const bob = Math.sin(n.animT * 2) * 0.05;
-    n.mesh.position.y += bob;
+
 
     if (n.mesh.userData.questMarker) {
       n.mesh.userData.questMarker.visible = !n.questComplete && !n.hostile;
-      n.mesh.userData.questMarker.position.y = 3.8 + Math.sin(n.animT * 3) * 0.2;
+      n.mesh.userData.questMarker.position.y = n.mesh.userData.questMarkerHeight + Math.sin(n.animT * 3) * 0.2;
     }
 
     if (n.flashTimer > 0) {

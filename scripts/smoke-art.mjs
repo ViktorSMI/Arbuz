@@ -46,7 +46,7 @@ try{
   await page.locator('a[href="index3d.html"]').first().click();await ready();checks.push('launcher link opens the local game');
   await page.goto('about:blank');
   await page.goto(url,{timeout:30000});await ready();await page.waitForFunction(()=>Boolean(window.__arbuzReview));await snap('01-menu');
-  assert.equal((await inspect()).art,'orchard-1');checks.push('offline boot and hero');
+  assert.equal((await inspect()).art,'orchard-2');checks.push('offline boot and hero');
   await page.locator('#btn-play').click();await page.waitForFunction(()=>document.body.dataset.gameState==='playing');
   // Functional input checks use the low preset on a software-rendered runner.
   await page.keyboard.press('Escape');await page.waitForSelector('#settings-panel',{state:'visible'});
