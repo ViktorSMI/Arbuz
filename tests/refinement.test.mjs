@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { organicGeometry, seedGeometry, branchGeometry } from '../js/art/sculpt.js';
@@ -6,7 +7,7 @@ import { spring, solveLeg, deformCloth, groundHero } from '../js/art/motion.js';
 import { createHero } from '../js/art/characters.js';
 import { createResident, RESIDENT_NAMES, animateResident } from '../js/art/inhabitants.js';
 import { animateHero } from '../js/art/animation.js';
-import { createTree } from '../js/art/botany.js';
+import { createTree, createGroundcover } from '../js/art/botany.js';
 import { randomSeed } from '../js/art/palette.js';
 import { material, surface } from '../js/art/materials.js';
 import { createContactShadows } from '../js/art/contact-shadows.js';
@@ -73,4 +74,38 @@ test('contact shadows have bounded capacity and release the instanced GPU resour
   shadow.update(player,Array.from({length:10},(_,i)=>({alive:true,x:i,y:0,z:0,type:{r:.6}})),[],null);
   assert.equal(shadow.mesh.count,4);let disposed=false;shadow.mesh.addEventListener('dispose',()=>disposed=true);
   shadow.dispose();assert(disposed);assert.equal(scene.children.length,0);
+});
+
+test('instanced understory always supplies neutral vertex colours',()=>{
+  const cover=createGroundcover(0,randomSeed(19),()=>0,()=>5,mergeGeometries,{value:0},'low');
+  assert.equal(cover.children.length,3);
+  for(const mesh of cover.children){
+    assert(mesh.count>0);assert.equal(mesh.geometry.attributes.color.count,mesh.geometry.attributes.position.count);
+    assert(Array.from(mesh.geometry.attributes.color.array).every(v=>v===1));
+  }
+  disposeRig(cover);
+});
+test('NPC upper leg pivots are embedded in their body rather than detached',()=>{
+  for(const name of RESIDENT_NAMES){
+    const rig=createResident(name);rig.updateMatrixWorld(true);
+    for(const side of ['L','R']){
+      const point=rig.userData[`leg${side}`].getWorldPosition(new THREE.Vector3());
+      rig.userData.body.worldToLocal(point);assert(point.length()<1,name+' '+side);
+    }
+    disposeRig(rig);
+  }
+});
+
+test('resident eyes attach to the generated surface, including the ribbed pumpkin',()=>{
+  for(const name of RESIDENT_NAMES){
+    const rig=createResident(name);rig.updateMatrixWorld(true);
+    assert.equal(rig.userData.eyes.length,2);
+    for(const eye of rig.userData.eyes){
+      const position=eye.getWorldPosition(new THREE.Vector3());
+      const ray=new THREE.Raycaster(position.clone().add(new THREE.Vector3(0,0,2)),new THREE.Vector3(0,0,-1));
+      const hit=ray.intersectObject(rig.userData.body,false)[0];
+      assert(hit&&hit.distance>2.01&&hit.distance<2.04,name+' eye surface attachment');
+    }
+    disposeRig(rig);
+  }
 });

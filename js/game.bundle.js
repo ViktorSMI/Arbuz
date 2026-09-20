@@ -254,13 +254,13 @@
     return p;
   }
   function checkIntersection$1(object, material2, raycaster, ray, pA, pB, pC, point) {
-    let intersect;
+    let intersect2;
     if (material2.side === BackSide) {
-      intersect = ray.intersectTriangle(pC, pB, pA, true, point);
+      intersect2 = ray.intersectTriangle(pC, pB, pA, true, point);
     } else {
-      intersect = ray.intersectTriangle(pA, pB, pC, material2.side === FrontSide, point);
+      intersect2 = ray.intersectTriangle(pA, pB, pC, material2.side === FrontSide, point);
     }
-    if (intersect === null) return null;
+    if (intersect2 === null) return null;
     _intersectionPointWorld.copy(point);
     _intersectionPointWorld.applyMatrix4(object.matrixWorld);
     const distance = raycaster.ray.origin.distanceTo(_intersectionPointWorld);
@@ -7702,7 +7702,23 @@
   function now() {
     return performance.now();
   }
-  var REVISION, CullFaceNone, CullFaceBack, CullFaceFront, PCFShadowMap, PCFSoftShadowMap, VSMShadowMap, FrontSide, BackSide, DoubleSide, NoBlending, NormalBlending, AdditiveBlending, SubtractiveBlending, MultiplyBlending, CustomBlending, AddEquation, SubtractEquation, ReverseSubtractEquation, MinEquation, MaxEquation, ZeroFactor, OneFactor, SrcColorFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DstAlphaFactor, OneMinusDstAlphaFactor, DstColorFactor, OneMinusDstColorFactor, SrcAlphaSaturateFactor, ConstantColorFactor, OneMinusConstantColorFactor, ConstantAlphaFactor, OneMinusConstantAlphaFactor, NeverDepth, AlwaysDepth, LessDepth, LessEqualDepth, EqualDepth, GreaterEqualDepth, GreaterDepth, NotEqualDepth, MultiplyOperation, MixOperation, AddOperation, NoToneMapping, LinearToneMapping, ReinhardToneMapping, CineonToneMapping, ACESFilmicToneMapping, CustomToneMapping, AgXToneMapping, NeutralToneMapping, UVMapping, CubeReflectionMapping, CubeRefractionMapping, EquirectangularReflectionMapping, EquirectangularRefractionMapping, CubeUVReflectionMapping, RepeatWrapping, ClampToEdgeWrapping, MirroredRepeatWrapping, NearestFilter, NearestMipmapNearestFilter, NearestMipmapLinearFilter, LinearFilter, LinearMipmapNearestFilter, LinearMipmapLinearFilter, UnsignedByteType, ByteType, ShortType, UnsignedShortType, IntType, UnsignedIntType, FloatType, HalfFloatType, UnsignedShort4444Type, UnsignedShort5551Type, UnsignedInt248Type, UnsignedInt5999Type, AlphaFormat, RGBFormat, RGBAFormat, LuminanceFormat, LuminanceAlphaFormat, DepthFormat, DepthStencilFormat, RedFormat, RedIntegerFormat, RGFormat, RGIntegerFormat, RGBAIntegerFormat, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format, RGBA_S3TC_DXT3_Format, RGBA_S3TC_DXT5_Format, RGB_PVRTC_4BPPV1_Format, RGB_PVRTC_2BPPV1_Format, RGBA_PVRTC_4BPPV1_Format, RGBA_PVRTC_2BPPV1_Format, RGB_ETC1_Format, RGB_ETC2_Format, RGBA_ETC2_EAC_Format, RGBA_ASTC_4x4_Format, RGBA_ASTC_5x4_Format, RGBA_ASTC_5x5_Format, RGBA_ASTC_6x5_Format, RGBA_ASTC_6x6_Format, RGBA_ASTC_8x5_Format, RGBA_ASTC_8x6_Format, RGBA_ASTC_8x8_Format, RGBA_ASTC_10x5_Format, RGBA_ASTC_10x6_Format, RGBA_ASTC_10x8_Format, RGBA_ASTC_10x10_Format, RGBA_ASTC_12x10_Format, RGBA_ASTC_12x12_Format, RGBA_BPTC_Format, RGB_BPTC_SIGNED_Format, RGB_BPTC_UNSIGNED_Format, RED_RGTC1_Format, SIGNED_RED_RGTC1_Format, RED_GREEN_RGTC2_Format, SIGNED_RED_GREEN_RGTC2_Format, LoopOnce, LoopRepeat, LoopPingPong, InterpolateDiscrete, InterpolateLinear, InterpolateSmooth, ZeroCurvatureEnding, ZeroSlopeEnding, WrapAroundEnding, NormalAnimationBlendMode, AdditiveAnimationBlendMode, BasicDepthPacking, RGBADepthPacking, TangentSpaceNormalMap, ObjectSpaceNormalMap, NoColorSpace, SRGBColorSpace, LinearSRGBColorSpace, LinearTransfer, SRGBTransfer, KeepStencilOp, AlwaysStencilFunc, NeverCompare, LessCompare, EqualCompare, LessEqualCompare, GreaterCompare, NotEqualCompare, GreaterEqualCompare, AlwaysCompare, StaticDrawUsage, DynamicDrawUsage, GLSL3, WebGLCoordinateSystem, WebGPUCoordinateSystem, EventDispatcher, _lut, _seed, DEG2RAD, RAD2DEG, MathUtils, Vector2, Matrix3, _m3, _cache, ColorManagement, REC709_PRIMARIES, REC709_LUMINANCE_COEFFICIENTS, D65, LINEAR_REC709_TO_XYZ, XYZ_TO_LINEAR_REC709, _canvas, ImageUtils, _sourceId, Source, _textureId, Texture, Vector4, RenderTarget, WebGLRenderTarget, DataArrayTexture, Data3DTexture, Quaternion, Vector3, _vector$c, _quaternion$4, Box3, _points, _vector$b, _box$4, _v0$3, _v1$7, _v2$4, _f0, _f1, _f2, _center, _extents, _triangleNormal, _testAxis, _box$3, _v1$6, _v2$3, Sphere, _vector$a, _segCenter, _segDir, _diff, _edge1, _edge2, _normal$1, Ray, Matrix4, _v1$5, _m1$4, _zero, _one, _x, _y, _z, _matrix$2, _quaternion$3, Euler, Layers, _object3DId, _v1$4, _q1, _m1$3, _target, _position$3, _scale$2, _quaternion$2, _xAxis, _yAxis, _zAxis, _addedEvent, _removedEvent, _childaddedEvent, _childremovedEvent, Object3D, _v0$2, _v1$3, _v2$2, _v3$2, _vab, _vac, _vbc, _vap, _vbp, _vcp, _v40, _v41, _v42, Triangle, _colorKeywords, _hslA, _hslB, Color, _color, _materialId, Material, MeshBasicMaterial, _vector$9, _vector2$1, BufferAttribute, Uint16BufferAttribute, Uint32BufferAttribute, Float32BufferAttribute, _id$2, _m1$2, _obj, _offset, _box$2, _boxMorphTargets, _vector$8, BufferGeometry, _inverseMatrix$3, _ray$3, _sphere$6, _sphereHitAt, _vA$1, _vB$1, _vC$1, _tempA, _morphA, _intersectionPoint, _intersectionPointWorld, Mesh, BoxGeometry, UniformsUtils, default_vertex, default_fragment, ShaderMaterial, Camera, _v3$1, _minTarget, _maxTarget, PerspectiveCamera, fov, aspect, CubeCamera, CubeTexture, WebGLCubeRenderTarget, _vector1, _vector2, _normalMatrix, Plane, _sphere$5, _vector$7, Frustum, PlaneGeometry, alphahash_fragment, alphahash_pars_fragment, alphamap_fragment, alphamap_pars_fragment, alphatest_fragment, alphatest_pars_fragment, aomap_fragment, aomap_pars_fragment, batching_pars_vertex, batching_vertex, begin_vertex, beginnormal_vertex, bsdfs, iridescence_fragment, bumpmap_pars_fragment, clipping_planes_fragment, clipping_planes_pars_fragment, clipping_planes_pars_vertex, clipping_planes_vertex, color_fragment, color_pars_fragment, color_pars_vertex, color_vertex, common, cube_uv_reflection_fragment, defaultnormal_vertex, displacementmap_pars_vertex, displacementmap_vertex, emissivemap_fragment, emissivemap_pars_fragment, colorspace_fragment, colorspace_pars_fragment, envmap_fragment, envmap_common_pars_fragment, envmap_pars_fragment, envmap_pars_vertex, envmap_vertex, fog_vertex, fog_pars_vertex, fog_fragment, fog_pars_fragment, gradientmap_pars_fragment, lightmap_pars_fragment, lights_lambert_fragment, lights_lambert_pars_fragment, lights_pars_begin, envmap_physical_pars_fragment, lights_toon_fragment, lights_toon_pars_fragment, lights_phong_fragment, lights_phong_pars_fragment, lights_physical_fragment, lights_physical_pars_fragment, lights_fragment_begin, lights_fragment_maps, lights_fragment_end, logdepthbuf_fragment, logdepthbuf_pars_fragment, logdepthbuf_pars_vertex, logdepthbuf_vertex, map_fragment, map_pars_fragment, map_particle_fragment, map_particle_pars_fragment, metalnessmap_fragment, metalnessmap_pars_fragment, morphinstance_vertex, morphcolor_vertex, morphnormal_vertex, morphtarget_pars_vertex, morphtarget_vertex, normal_fragment_begin, normal_fragment_maps, normal_pars_fragment, normal_pars_vertex, normal_vertex, normalmap_pars_fragment, clearcoat_normal_fragment_begin, clearcoat_normal_fragment_maps, clearcoat_pars_fragment, iridescence_pars_fragment, opaque_fragment, packing, premultiplied_alpha_fragment, project_vertex, dithering_fragment, dithering_pars_fragment, roughnessmap_fragment, roughnessmap_pars_fragment, shadowmap_pars_fragment, shadowmap_pars_vertex, shadowmap_vertex, shadowmask_pars_fragment, skinbase_vertex, skinning_pars_vertex, skinning_vertex, skinnormal_vertex, specularmap_fragment, specularmap_pars_fragment, tonemapping_fragment, tonemapping_pars_fragment, transmission_fragment, transmission_pars_fragment, uv_pars_fragment, uv_pars_vertex, uv_vertex, worldpos_vertex, vertex$h, fragment$h, vertex$g, fragment$g, vertex$f, fragment$f, vertex$e, fragment$e, vertex$d, fragment$d, vertex$c, fragment$c, vertex$b, fragment$b, vertex$a, fragment$a, vertex$9, fragment$9, vertex$8, fragment$8, vertex$7, fragment$7, vertex$6, fragment$6, vertex$5, fragment$5, vertex$4, fragment$4, vertex$3, fragment$3, vertex$2, fragment$2, vertex$1, fragment$1, ShaderChunk, UniformsLib, ShaderLib, _rgb, _e1$1, _m1$1, OrthographicCamera, LOD_MIN, EXTRA_LOD_SIGMA, MAX_SAMPLES, _flatCamera, _clearColor, _oldTarget, _oldActiveCubeFace, _oldActiveMipmapLevel, _oldXrEnabled, PHI, INV_PHI, _axisDirections, PMREMGenerator, DepthTexture, emptyTexture, emptyShadowTexture, emptyArrayTexture, empty3dTexture, emptyCubeTexture, arrayCacheF32, arrayCacheI32, mat4array, mat3array, mat2array, SingleUniform, PureArrayUniform, StructuredUniform, RePathPart, WebGLUniforms, COMPLETION_STATUS_KHR, programIdCount, _m0, _v0$1, includePattern, shaderChunkMap, unrollLoopPattern, _id$1, WebGLShaderCache, WebGLShaderStage, nextVersion, MeshDepthMaterial, MeshDistanceMaterial, vertex, fragment, reversedFuncs, ArrayCamera, Group, _moveEvent, WebXRController, _occlusion_vertex, _occlusion_fragment, WebXRDepthSensing, WebXRManager, _e1, _m1, WebGLRenderer, FogExp2, Scene, InterleavedBuffer, _vector$6, InterleavedBufferAttribute, SpriteMaterial, _geometry, _intersectPoint, _worldScale, _mvPosition, _alignedPosition, _rotatedPosition, _viewWorldMatrix, _vA, _vB, _vC, _uvA, _uvB, _uvC, Sprite, DataTexture, InstancedBufferAttribute, _instanceLocalMatrix, _instanceWorldMatrix, _instanceIntersects, _box3, _identity, _mesh$1, _sphere$3, InstancedMesh, PointsMaterial, _inverseMatrix, _ray, _sphere, _position$2, Points, CanvasTexture, Curve, EllipseCurve, ArcCurve, tmp, px, py, pz, CatmullRomCurve3, CubicBezierCurve, CubicBezierCurve3, LineCurve, LineCurve3, QuadraticBezierCurve, QuadraticBezierCurve3, SplineCurve, Curves, CurvePath, Path, LatheGeometry, CircleGeometry, CylinderGeometry, ConeGeometry, PolyhedronGeometry, Shape, Earcut, ShapeUtils, ExtrudeGeometry, WorldUVGenerator, IcosahedronGeometry, OctahedronGeometry, RingGeometry, SphereGeometry, TorusGeometry, TubeGeometry, RawShaderMaterial, MeshStandardMaterial, Interpolant, CubicInterpolant, LinearInterpolant, DiscreteInterpolant, KeyframeTrack, BooleanKeyframeTrack, ColorKeyframeTrack, NumberKeyframeTrack, QuaternionLinearInterpolant, QuaternionKeyframeTrack, StringKeyframeTrack, VectorKeyframeTrack, AnimationClip, LoadingManager, DefaultLoadingManager, Loader, Light, HemisphereLight, _projScreenMatrix$1, _lightPositionWorld$1, _lookTarget$1, LightShadow, _projScreenMatrix, _lightPositionWorld, _lookTarget, PointLightShadow, PointLight, DirectionalLightShadow, DirectionalLight, AmbientLight, Clock, PropertyMixer, _RESERVED_CHARS_RE, _reservedRe, _wordChar, _wordCharOrDot, _directoryRe, _nodeRe, _objectRe, _propertyRe, _trackRe, _supportedObjectNames, Composite, PropertyBinding, AnimationAction, _controlInterpolantsResultBuffer, AnimationMixer;
+  function ascSort(a, b) {
+    return a.distance - b.distance;
+  }
+  function intersect(object, raycaster, intersects2, recursive) {
+    let propagate = true;
+    if (object.layers.test(raycaster.layers)) {
+      const result = object.raycast(raycaster, intersects2);
+      if (result === false) propagate = false;
+    }
+    if (propagate === true && recursive === true) {
+      const children = object.children;
+      for (let i = 0, l = children.length; i < l; i++) {
+        intersect(children[i], raycaster, intersects2, true);
+      }
+    }
+  }
+  var REVISION, CullFaceNone, CullFaceBack, CullFaceFront, PCFShadowMap, PCFSoftShadowMap, VSMShadowMap, FrontSide, BackSide, DoubleSide, NoBlending, NormalBlending, AdditiveBlending, SubtractiveBlending, MultiplyBlending, CustomBlending, AddEquation, SubtractEquation, ReverseSubtractEquation, MinEquation, MaxEquation, ZeroFactor, OneFactor, SrcColorFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DstAlphaFactor, OneMinusDstAlphaFactor, DstColorFactor, OneMinusDstColorFactor, SrcAlphaSaturateFactor, ConstantColorFactor, OneMinusConstantColorFactor, ConstantAlphaFactor, OneMinusConstantAlphaFactor, NeverDepth, AlwaysDepth, LessDepth, LessEqualDepth, EqualDepth, GreaterEqualDepth, GreaterDepth, NotEqualDepth, MultiplyOperation, MixOperation, AddOperation, NoToneMapping, LinearToneMapping, ReinhardToneMapping, CineonToneMapping, ACESFilmicToneMapping, CustomToneMapping, AgXToneMapping, NeutralToneMapping, UVMapping, CubeReflectionMapping, CubeRefractionMapping, EquirectangularReflectionMapping, EquirectangularRefractionMapping, CubeUVReflectionMapping, RepeatWrapping, ClampToEdgeWrapping, MirroredRepeatWrapping, NearestFilter, NearestMipmapNearestFilter, NearestMipmapLinearFilter, LinearFilter, LinearMipmapNearestFilter, LinearMipmapLinearFilter, UnsignedByteType, ByteType, ShortType, UnsignedShortType, IntType, UnsignedIntType, FloatType, HalfFloatType, UnsignedShort4444Type, UnsignedShort5551Type, UnsignedInt248Type, UnsignedInt5999Type, AlphaFormat, RGBFormat, RGBAFormat, LuminanceFormat, LuminanceAlphaFormat, DepthFormat, DepthStencilFormat, RedFormat, RedIntegerFormat, RGFormat, RGIntegerFormat, RGBAIntegerFormat, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format, RGBA_S3TC_DXT3_Format, RGBA_S3TC_DXT5_Format, RGB_PVRTC_4BPPV1_Format, RGB_PVRTC_2BPPV1_Format, RGBA_PVRTC_4BPPV1_Format, RGBA_PVRTC_2BPPV1_Format, RGB_ETC1_Format, RGB_ETC2_Format, RGBA_ETC2_EAC_Format, RGBA_ASTC_4x4_Format, RGBA_ASTC_5x4_Format, RGBA_ASTC_5x5_Format, RGBA_ASTC_6x5_Format, RGBA_ASTC_6x6_Format, RGBA_ASTC_8x5_Format, RGBA_ASTC_8x6_Format, RGBA_ASTC_8x8_Format, RGBA_ASTC_10x5_Format, RGBA_ASTC_10x6_Format, RGBA_ASTC_10x8_Format, RGBA_ASTC_10x10_Format, RGBA_ASTC_12x10_Format, RGBA_ASTC_12x12_Format, RGBA_BPTC_Format, RGB_BPTC_SIGNED_Format, RGB_BPTC_UNSIGNED_Format, RED_RGTC1_Format, SIGNED_RED_RGTC1_Format, RED_GREEN_RGTC2_Format, SIGNED_RED_GREEN_RGTC2_Format, LoopOnce, LoopRepeat, LoopPingPong, InterpolateDiscrete, InterpolateLinear, InterpolateSmooth, ZeroCurvatureEnding, ZeroSlopeEnding, WrapAroundEnding, NormalAnimationBlendMode, AdditiveAnimationBlendMode, BasicDepthPacking, RGBADepthPacking, TangentSpaceNormalMap, ObjectSpaceNormalMap, NoColorSpace, SRGBColorSpace, LinearSRGBColorSpace, LinearTransfer, SRGBTransfer, KeepStencilOp, AlwaysStencilFunc, NeverCompare, LessCompare, EqualCompare, LessEqualCompare, GreaterCompare, NotEqualCompare, GreaterEqualCompare, AlwaysCompare, StaticDrawUsage, DynamicDrawUsage, GLSL3, WebGLCoordinateSystem, WebGPUCoordinateSystem, EventDispatcher, _lut, _seed, DEG2RAD, RAD2DEG, MathUtils, Vector2, Matrix3, _m3, _cache, ColorManagement, REC709_PRIMARIES, REC709_LUMINANCE_COEFFICIENTS, D65, LINEAR_REC709_TO_XYZ, XYZ_TO_LINEAR_REC709, _canvas, ImageUtils, _sourceId, Source, _textureId, Texture, Vector4, RenderTarget, WebGLRenderTarget, DataArrayTexture, Data3DTexture, Quaternion, Vector3, _vector$c, _quaternion$4, Box3, _points, _vector$b, _box$4, _v0$3, _v1$7, _v2$4, _f0, _f1, _f2, _center, _extents, _triangleNormal, _testAxis, _box$3, _v1$6, _v2$3, Sphere, _vector$a, _segCenter, _segDir, _diff, _edge1, _edge2, _normal$1, Ray, Matrix4, _v1$5, _m1$4, _zero, _one, _x, _y, _z, _matrix$2, _quaternion$3, Euler, Layers, _object3DId, _v1$4, _q1, _m1$3, _target, _position$3, _scale$2, _quaternion$2, _xAxis, _yAxis, _zAxis, _addedEvent, _removedEvent, _childaddedEvent, _childremovedEvent, Object3D, _v0$2, _v1$3, _v2$2, _v3$2, _vab, _vac, _vbc, _vap, _vbp, _vcp, _v40, _v41, _v42, Triangle, _colorKeywords, _hslA, _hslB, Color, _color, _materialId, Material, MeshBasicMaterial, _vector$9, _vector2$1, BufferAttribute, Uint16BufferAttribute, Uint32BufferAttribute, Float32BufferAttribute, _id$2, _m1$2, _obj, _offset, _box$2, _boxMorphTargets, _vector$8, BufferGeometry, _inverseMatrix$3, _ray$3, _sphere$6, _sphereHitAt, _vA$1, _vB$1, _vC$1, _tempA, _morphA, _intersectionPoint, _intersectionPointWorld, Mesh, BoxGeometry, UniformsUtils, default_vertex, default_fragment, ShaderMaterial, Camera, _v3$1, _minTarget, _maxTarget, PerspectiveCamera, fov, aspect, CubeCamera, CubeTexture, WebGLCubeRenderTarget, _vector1, _vector2, _normalMatrix, Plane, _sphere$5, _vector$7, Frustum, PlaneGeometry, alphahash_fragment, alphahash_pars_fragment, alphamap_fragment, alphamap_pars_fragment, alphatest_fragment, alphatest_pars_fragment, aomap_fragment, aomap_pars_fragment, batching_pars_vertex, batching_vertex, begin_vertex, beginnormal_vertex, bsdfs, iridescence_fragment, bumpmap_pars_fragment, clipping_planes_fragment, clipping_planes_pars_fragment, clipping_planes_pars_vertex, clipping_planes_vertex, color_fragment, color_pars_fragment, color_pars_vertex, color_vertex, common, cube_uv_reflection_fragment, defaultnormal_vertex, displacementmap_pars_vertex, displacementmap_vertex, emissivemap_fragment, emissivemap_pars_fragment, colorspace_fragment, colorspace_pars_fragment, envmap_fragment, envmap_common_pars_fragment, envmap_pars_fragment, envmap_pars_vertex, envmap_vertex, fog_vertex, fog_pars_vertex, fog_fragment, fog_pars_fragment, gradientmap_pars_fragment, lightmap_pars_fragment, lights_lambert_fragment, lights_lambert_pars_fragment, lights_pars_begin, envmap_physical_pars_fragment, lights_toon_fragment, lights_toon_pars_fragment, lights_phong_fragment, lights_phong_pars_fragment, lights_physical_fragment, lights_physical_pars_fragment, lights_fragment_begin, lights_fragment_maps, lights_fragment_end, logdepthbuf_fragment, logdepthbuf_pars_fragment, logdepthbuf_pars_vertex, logdepthbuf_vertex, map_fragment, map_pars_fragment, map_particle_fragment, map_particle_pars_fragment, metalnessmap_fragment, metalnessmap_pars_fragment, morphinstance_vertex, morphcolor_vertex, morphnormal_vertex, morphtarget_pars_vertex, morphtarget_vertex, normal_fragment_begin, normal_fragment_maps, normal_pars_fragment, normal_pars_vertex, normal_vertex, normalmap_pars_fragment, clearcoat_normal_fragment_begin, clearcoat_normal_fragment_maps, clearcoat_pars_fragment, iridescence_pars_fragment, opaque_fragment, packing, premultiplied_alpha_fragment, project_vertex, dithering_fragment, dithering_pars_fragment, roughnessmap_fragment, roughnessmap_pars_fragment, shadowmap_pars_fragment, shadowmap_pars_vertex, shadowmap_vertex, shadowmask_pars_fragment, skinbase_vertex, skinning_pars_vertex, skinning_vertex, skinnormal_vertex, specularmap_fragment, specularmap_pars_fragment, tonemapping_fragment, tonemapping_pars_fragment, transmission_fragment, transmission_pars_fragment, uv_pars_fragment, uv_pars_vertex, uv_vertex, worldpos_vertex, vertex$h, fragment$h, vertex$g, fragment$g, vertex$f, fragment$f, vertex$e, fragment$e, vertex$d, fragment$d, vertex$c, fragment$c, vertex$b, fragment$b, vertex$a, fragment$a, vertex$9, fragment$9, vertex$8, fragment$8, vertex$7, fragment$7, vertex$6, fragment$6, vertex$5, fragment$5, vertex$4, fragment$4, vertex$3, fragment$3, vertex$2, fragment$2, vertex$1, fragment$1, ShaderChunk, UniformsLib, ShaderLib, _rgb, _e1$1, _m1$1, OrthographicCamera, LOD_MIN, EXTRA_LOD_SIGMA, MAX_SAMPLES, _flatCamera, _clearColor, _oldTarget, _oldActiveCubeFace, _oldActiveMipmapLevel, _oldXrEnabled, PHI, INV_PHI, _axisDirections, PMREMGenerator, DepthTexture, emptyTexture, emptyShadowTexture, emptyArrayTexture, empty3dTexture, emptyCubeTexture, arrayCacheF32, arrayCacheI32, mat4array, mat3array, mat2array, SingleUniform, PureArrayUniform, StructuredUniform, RePathPart, WebGLUniforms, COMPLETION_STATUS_KHR, programIdCount, _m0, _v0$1, includePattern, shaderChunkMap, unrollLoopPattern, _id$1, WebGLShaderCache, WebGLShaderStage, nextVersion, MeshDepthMaterial, MeshDistanceMaterial, vertex, fragment, reversedFuncs, ArrayCamera, Group, _moveEvent, WebXRController, _occlusion_vertex, _occlusion_fragment, WebXRDepthSensing, WebXRManager, _e1, _m1, WebGLRenderer, FogExp2, Scene, InterleavedBuffer, _vector$6, InterleavedBufferAttribute, SpriteMaterial, _geometry, _intersectPoint, _worldScale, _mvPosition, _alignedPosition, _rotatedPosition, _viewWorldMatrix, _vA, _vB, _vC, _uvA, _uvB, _uvC, Sprite, DataTexture, InstancedBufferAttribute, _instanceLocalMatrix, _instanceWorldMatrix, _instanceIntersects, _box3, _identity, _mesh$1, _sphere$3, InstancedMesh, PointsMaterial, _inverseMatrix, _ray, _sphere, _position$2, Points, CanvasTexture, Curve, EllipseCurve, ArcCurve, tmp, px, py, pz, CatmullRomCurve3, CubicBezierCurve, CubicBezierCurve3, LineCurve, LineCurve3, QuadraticBezierCurve, QuadraticBezierCurve3, SplineCurve, Curves, CurvePath, Path, LatheGeometry, CircleGeometry, CylinderGeometry, ConeGeometry, PolyhedronGeometry, Shape, Earcut, ShapeUtils, ExtrudeGeometry, WorldUVGenerator, IcosahedronGeometry, OctahedronGeometry, RingGeometry, SphereGeometry, TorusGeometry, TubeGeometry, RawShaderMaterial, MeshStandardMaterial, Interpolant, CubicInterpolant, LinearInterpolant, DiscreteInterpolant, KeyframeTrack, BooleanKeyframeTrack, ColorKeyframeTrack, NumberKeyframeTrack, QuaternionLinearInterpolant, QuaternionKeyframeTrack, StringKeyframeTrack, VectorKeyframeTrack, AnimationClip, LoadingManager, DefaultLoadingManager, Loader, Light, HemisphereLight, _projScreenMatrix$1, _lightPositionWorld$1, _lookTarget$1, LightShadow, _projScreenMatrix, _lightPositionWorld, _lookTarget, PointLightShadow, PointLight, DirectionalLightShadow, DirectionalLight, AmbientLight, Clock, PropertyMixer, _RESERVED_CHARS_RE, _reservedRe, _wordChar, _wordCharOrDot, _directoryRe, _nodeRe, _objectRe, _propertyRe, _trackRe, _supportedObjectNames, Composite, PropertyBinding, AnimationAction, _controlInterpolantsResultBuffer, AnimationMixer, _matrix, Raycaster;
   var init_three_module = __esm({
     "node_modules/three/build/three.module.js"() {
       REVISION = "170";
@@ -19338,12 +19354,12 @@ void main() {
           _uvA.set(0, 0);
           _uvB.set(1, 0);
           _uvC.set(1, 1);
-          let intersect = raycaster.ray.intersectTriangle(_vA, _vB, _vC, false, _intersectPoint);
-          if (intersect === null) {
+          let intersect2 = raycaster.ray.intersectTriangle(_vA, _vB, _vC, false, _intersectPoint);
+          if (intersect2 === null) {
             transformVertex(_vB.set(-0.5, 0.5, 0), _mvPosition, center, _worldScale, sin, cos);
             _uvB.set(0, 1);
-            intersect = raycaster.ray.intersectTriangle(_vA, _vC, _vB, false, _intersectPoint);
-            if (intersect === null) {
+            intersect2 = raycaster.ray.intersectTriangle(_vA, _vC, _vB, false, _intersectPoint);
+            if (intersect2 === null) {
               return;
             }
           }
@@ -19486,10 +19502,10 @@ void main() {
             _mesh$1.matrixWorld = _instanceWorldMatrix;
             _mesh$1.raycast(raycaster, _instanceIntersects);
             for (let i = 0, l = _instanceIntersects.length; i < l; i++) {
-              const intersect = _instanceIntersects[i];
-              intersect.instanceId = instanceId;
-              intersect.object = this;
-              intersects2.push(intersect);
+              const intersect2 = _instanceIntersects[i];
+              intersect2.instanceId = instanceId;
+              intersect2.object = this;
+              intersects2.push(intersect2);
             }
             _instanceIntersects.length = 0;
           }
@@ -24422,6 +24438,57 @@ void main() {
           }
         }
       };
+      _matrix = /* @__PURE__ */ new Matrix4();
+      Raycaster = class {
+        constructor(origin, direction, near = 0, far = Infinity) {
+          this.ray = new Ray(origin, direction);
+          this.near = near;
+          this.far = far;
+          this.camera = null;
+          this.layers = new Layers();
+          this.params = {
+            Mesh: {},
+            Line: { threshold: 1 },
+            LOD: {},
+            Points: { threshold: 1 },
+            Sprite: {}
+          };
+        }
+        set(origin, direction) {
+          this.ray.set(origin, direction);
+        }
+        setFromCamera(coords, camera2) {
+          if (camera2.isPerspectiveCamera) {
+            this.ray.origin.setFromMatrixPosition(camera2.matrixWorld);
+            this.ray.direction.set(coords.x, coords.y, 0.5).unproject(camera2).sub(this.ray.origin).normalize();
+            this.camera = camera2;
+          } else if (camera2.isOrthographicCamera) {
+            this.ray.origin.set(coords.x, coords.y, (camera2.near + camera2.far) / (camera2.near - camera2.far)).unproject(camera2);
+            this.ray.direction.set(0, 0, -1).transformDirection(camera2.matrixWorld);
+            this.camera = camera2;
+          } else {
+            console.error("THREE.Raycaster: Unsupported camera type: " + camera2.type);
+          }
+        }
+        setFromXRController(controller) {
+          _matrix.identity().extractRotation(controller.matrixWorld);
+          this.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+          this.ray.direction.set(0, 0, -1).applyMatrix4(_matrix);
+          return this;
+        }
+        intersectObject(object, recursive = true, intersects2 = []) {
+          intersect(object, this, intersects2, recursive);
+          intersects2.sort(ascSort);
+          return intersects2;
+        }
+        intersectObjects(objects, recursive = true, intersects2 = []) {
+          for (let i = 0, l = objects.length; i < l; i++) {
+            intersect(objects[i], this, intersects2, recursive);
+          }
+          intersects2.sort(ascSort);
+          return intersects2;
+        }
+      };
       if (typeof __THREE_DEVTOOLS__ !== "undefined") {
         __THREE_DEVTOOLS__.dispatchEvent(new CustomEvent("register", { detail: {
           revision: REVISION
@@ -26345,6 +26412,10 @@ float orchardFbm(vec2 p) { return orchardNoise(p)*.57 + orchardNoise(p*2.03+7.4)
     ];
     const transform2 = new Object3D(), color = new Color();
     types.forEach((mesh2, k) => {
+      mesh2.geometry.setAttribute("color", new Float32BufferAttribute(
+        new Float32Array(mesh2.geometry.attributes.position.count * 3).fill(1),
+        3
+      ));
       let n = 0;
       for (let i = 0; i < mesh2.count; i++) {
         const range = k === 2 ? 125 : 90, x = (rng() - 0.5) * range, z = (rng() - 0.5) * range, y = heightAt(x, z);
@@ -26677,11 +26748,22 @@ float orchardFbm(vec2 p) { return orchardNoise(p)*.57 + orchardNoise(p*2.03+7.4)
   });
 
   // js/art/inhabitants.js
-  function eyes2(parent, y, z, x = 0.19) {
-    for (const s of [-1, 1]) {
-      part(parent, material("iron"), [s * x, y, z], [0.095, 0.05, 0.035]);
-      part(parent, glow("#d9c193", 0.3), [s * x, y, z + 0.025], [0.046, 0.021, 0.022]);
+  function eyes2(parent, y, z, x = 0.19, body = null) {
+    const meshes = [], ray = new Raycaster();
+    if (body) body.updateWorldMatrix(true, false);
+    for (const side of [-1, 1]) {
+      let surfaceZ = z;
+      if (body) {
+        const origin = parent.localToWorld(new Vector3(side * x, y, 3));
+        const direction = new Vector3(0, 0, -1).transformDirection(parent.matrixWorld);
+        ray.set(origin, direction);
+        const hit = ray.intersectObject(body, false)[0];
+        if (hit) surfaceZ = parent.worldToLocal(hit.point.clone()).z + 0.018;
+      }
+      meshes.push(part(parent, material("iron"), [side * x, y, surfaceZ], [0.095, 0.05, 0.035]));
+      part(parent, glow("#d9c193", 0.3), [side * x, y, surfaceZ + 0.025], [0.046, 0.021, 0.022]);
     }
+    return meshes;
   }
   function staff(parent) {
     sculpt(parent, branchGeometry([[0, 0, 0], [0.03, 0.7, 0.05], [-0.07, 1.4, 0], [0.04, 2.05, 0.04], [0.26, 2.13, 0.04]], 0.045, 0.023, 15, 7), material("bark", "#cec1a5"));
@@ -26691,7 +26773,17 @@ float orchardFbm(vec2 p) { return orchardNoise(p)*.57 + orchardNoise(p*2.03+7.4)
   function capGeometry() {
     const points = [];
     for (const [r, y] of [[0, 0.45], [0.12, 0.44], [0.3, 0.4], [0.53, 0.29], [0.75, 0.12], [0.84, 0.015], [0.79, -0.045], [0.57, -0.03], [0.34, 0.05], [0.08, 0.1], [0, 0.1]]) points.push(new Vector2(r, y));
-    return new LatheGeometry(points, 40);
+    const geometry = new LatheGeometry(points, 40), top = [], underside = [];
+    const indices = geometry.index.array, quads = points.length - 1;
+    for (let q = 0; q < 40 * quads; q++) {
+      const target = q % quads < 6 ? top : underside;
+      for (let k = 0; k < 6; k++) target.push(indices[q * 6 + k]);
+    }
+    geometry.setIndex([...top, ...underside]);
+    geometry.clearGroups();
+    geometry.addGroup(0, top.length, 0);
+    geometry.addGroup(top.length, underside.length, 1);
+    return geometry;
   }
   function createResident(name) {
     const index = RESIDENT_NAMES.indexOf(typeof name === "string" ? name : name.name);
@@ -26712,21 +26804,22 @@ float orchardFbm(vec2 p) { return orchardNoise(p)*.57 + orchardNoise(p*2.03+7.4)
     body.scale.fromArray(size);
     body.position.y = index === 0 ? 0.36 : index === 1 ? 0.17 : 0.29;
     const eyeY = index === 0 ? 0.65 : index === 1 ? 0.3 : 0.53, eyeZ = size[2] * 0.91;
-    eyes2(hip, eyeY, eyeZ, index === 0 || index === 2 ? 0.14 : 0.19);
+    root.userData.eyes = eyes2(hip, eyeY, eyeZ, index === 0 || index === 2 ? 0.14 : 0.19, body);
     for (const [s, side] of [[-1, "L"], [1, "R"]]) {
       const arm = pivot(hip, `resident-arm${side}`, [s * (size[0] * 0.82), 0.24, 0]);
       root.userData[`arm${side}`] = arm;
       if (index === 0) {
         sculpt(arm, branchGeometry([[0, 0, 0], [s * 0.3, 0.02, 0], [s * 0.38, 0.24, 0], [s * 0.36, 0.6, 0]], 0.13, 0.08, 12, 8), skin2);
+        part(arm, skin2, [s * 0.36, 0.6, 0], [0.083, 0.1, 0.083]);
       } else {
         sculpt(arm, branchGeometry([[0, 0, 0], [s * 0.18, -0.16, 0.04], [s * 0.25, -0.28, 0.14]], 0.058, 0.042, 8, 7), material("bark", "#bead8a"));
         part(arm, cloth, [s * 0.19, -0.2, 0.07], [0.085, 0.08, 0.068]);
         part(arm, bronze, [s * 0.25, -0.29, 0.14], [0.071, 0.067, 0.065]);
       }
-      const leg = pivot(hip, `resident-leg${side}`, [s * 0.18, -0.34, 0]);
+      const leg = pivot(hip, `resident-leg${side}`, [s * (index === 2 ? 0.14 : 0.18), -0.18, 0]);
       root.userData[`leg${side}`] = leg;
-      link(leg, material("bark"), [0, 0, 0], [0, -0.35, 0], 0.09, 0.065);
-      part(leg, material("bark", "#c6b28c"), [0, -0.39, 0.1], [0.14, 0.075, 0.23]);
+      link(leg, material("bark"), [0, 0, 0], [0, -0.51, 0], 0.09, 0.065);
+      part(leg, material("bark", "#c6b28c"), [0, -0.55, 0.1], [0.14, 0.075, 0.23]);
     }
     if (index === 0) {
       const needles = new Group();
@@ -26751,7 +26844,7 @@ float orchardFbm(vec2 p) { return orchardNoise(p)*.57 + orchardNoise(p*2.03+7.4)
       const stick = pivot(root, "walking-stick", [-0.82, 0, 0.22]);
       staff(stick);
     } else if (index === 2) {
-      sculpt(hip, capGeometry(), material("mushroom"), [0, 0.98, 0]);
+      sculpt(hip, capGeometry(), [material("mushroom"), material("bone", "#f0e0bb")], [0, 0.98, 0]);
       const gills = new Group();
       for (let f = 0; f < 22; f++) {
         const a = f / 22 * Math.PI * 2;

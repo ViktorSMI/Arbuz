@@ -7,11 +7,22 @@ import { ART_VERSION } from './palette.js';
 
 export const RESIDENT_NAMES=Object.freeze(['Мудрый Кактус','Старый Тыквос','Грибочек','Морковка-ведунья','Баклажан-торговец']);
 const twoSided={side:THREE.DoubleSide};
-function eyes(parent,y,z,x=.19) {
-  for(const s of [-1,1]) {
-    part(parent,material('iron'),[s*x,y,z],[.095,.05,.035]);
-    part(parent,glow('#d9c193',.3),[s*x,y,z+.025],[.046,.021,.022]);
+function eyes(parent,y,z,x=.19,body=null) {
+  const meshes=[],ray=new THREE.Raycaster();
+  if(body)body.updateWorldMatrix(true,false);
+  for(const side of [-1,1]) {
+    let surfaceZ=z;
+    if(body) {
+      const origin=parent.localToWorld(new THREE.Vector3(side*x,y,3));
+      const direction=new THREE.Vector3(0,0,-1).transformDirection(parent.matrixWorld);
+      ray.set(origin,direction);
+      const hit=ray.intersectObject(body,false)[0];
+      if(hit)surfaceZ=parent.worldToLocal(hit.point.clone()).z+.018;
+    }
+    meshes.push(part(parent,material('iron'),[side*x,y,surfaceZ],[.095,.05,.035]));
+    part(parent,glow('#d9c193',.3),[side*x,y,surfaceZ+.025],[.046,.021,.022]);
   }
+  return meshes;
 }
 function staff(parent) {
   sculpt(parent,branchGeometry([[0,0,0],[.03,.7,.05],[-.07,1.4,0],[.04,2.05,.04],[.26,2.13,.04]],.045,.023,15,7),material('bark','#cec1a5'));
@@ -22,7 +33,15 @@ function capGeometry() {
   const points=[];
   // A real mushroom profile: curled lip, domed cap and recessed underside.
   for(const [r,y] of [[0,.45],[.12,.44],[.30,.40],[.53,.29],[.75,.12],[.84,.015],[.79,-.045],[.57,-.03],[.34,.05],[.08,.1],[0,.1]]) points.push(new THREE.Vector2(r,y));
-  return new THREE.LatheGeometry(points,40);
+  const geometry=new THREE.LatheGeometry(points,40), top=[], underside=[];
+  const indices=geometry.index.array, quads=points.length-1;
+  for(let q=0;q<40*quads;q++) {
+    const target=q%quads<6?top:underside;
+    for(let k=0;k<6;k++)target.push(indices[q*6+k]);
+  }
+  geometry.setIndex([...top,...underside]);geometry.clearGroups();
+  geometry.addGroup(0,top.length,0);geometry.addGroup(top.length,underside.length,1);
+  return geometry;
 }
 
 export function createResident(name) {
@@ -39,20 +58,21 @@ export function createResident(name) {
   const size=[[.37,.87,.34],[.67,.60,.58],[.24,.63,.24],[.34,.79,.32],[.49,.79,.42]][index];
   body.scale.fromArray(size);body.position.y=index===0?.36:index===1?.17:.29;
   const eyeY=index===0?.65:index===1?.3:.53,eyeZ=size[2]*.91;
-  eyes(hip,eyeY,eyeZ,index===0||index===2?.14:.19);
+  root.userData.eyes=eyes(hip,eyeY,eyeZ,index===0||index===2?.14:.19,body);
   for(const [s,side] of [[-1,'L'],[1,'R']]) {
     const arm=pivot(hip,`resident-arm${side}`,[s*(size[0]*.82),.24,0]);
     root.userData[`arm${side}`]=arm;
     if(index===0) {
       sculpt(arm,branchGeometry([[0,0,0],[s*.30,.02,0],[s*.38,.24,0],[s*.36,.60,0]],.13,.08,12,8),skin);
+      part(arm,skin,[s*.36,.60,0],[.083,.10,.083]);
     } else {
       sculpt(arm,branchGeometry([[0,0,0],[s*.18,-.16,.04],[s*.25,-.28,.14]],.058,.042,8,7),material('bark','#bead8a'));
       part(arm,cloth,[s*.19,-.20,.07],[.085,.08,.068]);
       part(arm,bronze,[s*.25,-.29,.14],[.071,.067,.065]);
     }
-    const leg=pivot(hip,`resident-leg${side}`,[s*.18,-.34,0]);root.userData[`leg${side}`]=leg;
-    link(leg,material('bark'),[0,0,0],[0,-.35,0],.09,.065);
-    part(leg,material('bark','#c6b28c'),[0,-.39,.1],[.14,.075,.23]);
+    const leg=pivot(hip,`resident-leg${side}`,[s*(index===2?.14:.18),-.18,0]);root.userData[`leg${side}`]=leg;
+    link(leg,material('bark'),[0,0,0],[0,-.51,0],.09,.065);
+    part(leg,material('bark','#c6b28c'),[0,-.55,.1],[.14,.075,.23]);
   }
   if(index===0) {
     // Cactus needles are grouped rather than separate draws.
@@ -74,7 +94,7 @@ export function createResident(name) {
     for(const s of [-1,1])tube(hip,bronze,[[s*.24,.57,-.45],[s*.29,.30,-.64],[s*.22,-.1,-.56]],.024,8);
     const stick=pivot(root,'walking-stick',[-.82,0,.22]);staff(stick);
   } else if(index===2) {
-    sculpt(hip,capGeometry(),material('mushroom'),[0,.98,0]);
+    sculpt(hip,capGeometry(),[material('mushroom'),material('bone','#f0e0bb')],[0,.98,0]);
     const gills=new THREE.Group();
     for(let f=0;f<22;f++) {
       const a=f/22*Math.PI*2;

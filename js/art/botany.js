@@ -87,7 +87,7 @@ export function foliageShader(mat, time, strength = 1) {
   mat.customProgramCacheKey=()=>`orchard-foliage-2-${strength}`;
 }
 
-/** Instanced ferns, clover, small flowers and path gravel share four draws. */
+/** Instanced ferns, small flowers and path gravel share three draws. */
 export function createGroundcover(index, rng, heightAt, pathDistance, mergeGeometries, time, quality) {
   const result=new THREE.Group(); result.name='orchard-understory';
   const count=quality==='low'?180:quality==='high'?750:420;
@@ -124,6 +124,10 @@ export function createGroundcover(index, rng, heightAt, pathDistance, mergeGeome
     new THREE.InstancedMesh(stones,stoneMat,count*2)];
   const transform=new THREE.Object3D(), color=new THREE.Color();
   types.forEach((mesh,k)=>{
+    // MeshStandardMaterial has no default vertex colour. Supply white before
+    // multiplying the authored material and per-instance colour in the shader.
+    mesh.geometry.setAttribute('color',new THREE.Float32BufferAttribute(
+      new Float32Array(mesh.geometry.attributes.position.count*3).fill(1),3));
     let n=0;
     for(let i=0;i<mesh.count;i++) {
       const range=k===2?125:90, x=(rng()-.5)*range,z=(rng()-.5)*range,y=heightAt(x,z);
