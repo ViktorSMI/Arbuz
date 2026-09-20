@@ -27,7 +27,7 @@ jobs:
           python /tmp/glb-world-migrate.py
       - name: Build authored GLB assets
         run: |
-          python -m pip install --disable-pip-version-check --quiet "trimesh==4.11.1" "numpy>=2,<3"
+          python -m pip install --disable-pip-version-check --quiet "trimesh==4.11.1" "numpy>=2,<3" "scipy>=1.13,<2"
           python tools/generate_models.py
           test $(find assets/models -name '*.glb' | wc -l) -eq 16
       - run: npm ci
