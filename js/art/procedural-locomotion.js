@@ -81,15 +81,15 @@ class ProceduralHeroLocomotion {
     this.previousYaw = root.rotation.y;
     this.phase = 0;
     this.distance = 0;
+    this.frames = 0;
+    this.instantSpeed = 0;
     this.speed = 0;
     this.forwardSpeed = 0;
     this.lateralSpeed = 0;
     this.acceleration = 0;
-    this.previousSpeed = 0;
     this.weight = { value: 0, velocity: 0 };
     this.lean = { value: 0, velocity: 0 };
     this.sideLean = { value: 0, velocity: 0 };
-    this.turnLean = { value: 0, velocity: 0 };
     this.direction = new THREE.Vector3(0, 0, 1);
     this.velocity = new THREE.Vector3();
     this.delta = new THREE.Vector3();
@@ -97,7 +97,7 @@ class ProceduralHeroLocomotion {
     this.temp2 = new THREE.Vector3();
     this.rollQuaternion = new THREE.Quaternion();
     this.rollAxis = new THREE.Vector3(1, 0, 0);
-    this.roll = { active: false, distance: 0, angle: 0, angularVelocity: 0, radius: DODGE_SPEED * DODGE_DURATION / TAU };
+    this.roll = { active: false, frames: 0, distance: 0, angle: 0, angularVelocity: 0, radius: DODGE_SPEED * DODGE_DURATION / TAU };
     this.feet = {
       L: { planted: false, wasStance: false, anchor: new THREE.Vector3(), swingStart: new THREE.Vector3(), landing: new THREE.Vector3() },
       R: { planted: false, wasStance: false, anchor: new THREE.Vector3(), swingStart: new THREE.Vector3(), landing: new THREE.Vector3() },
@@ -114,12 +114,14 @@ class ProceduralHeroLocomotion {
       for (const foot of Object.values(this.feet)) foot.planted = foot.wasStance = false;
     }
     const velocitySpeed = player?.vel ? Math.hypot(player.vel.x || 0, player.vel.z || 0) : 0;
-    const measuredSpeed = dt > 0 && distance > 1e-6 ? distance / dt : velocitySpeed;
-    const targetSpeed = Math.min(PLAYER_SPRINT * 1.4, Math.max(measuredSpeed, velocitySpeed * .8));
+    if (this.frames === 0 && distance <= 1e-6 && dt > 0 && velocitySpeed > 0) distance = velocitySpeed * dt;
+    this.frames++;
+    const measuredSpeed = dt > 0 && distance > 1e-6 ? distance / dt : 0;
+    this.instantSpeed = measuredSpeed;
+    const targetSpeed = Math.min(PLAYER_SPRINT * 1.4, measuredSpeed);
     const oldSpeed = this.speed;
     this.speed = damp(this.speed, targetSpeed, 13, dt);
     this.acceleration = damp(this.acceleration, dt > 0 ? (this.speed - oldSpeed) / dt : 0, 8, dt);
-    this.previousSpeed = oldSpeed;
 
     if (player?.vel && horizontalLength(player.vel) > .01) this.velocity.set(player.vel.x, 0, player.vel.z);
     else if (dt > 0) this.velocity.set(this.delta.x / dt, 0, this.delta.z / dt);
@@ -205,6 +207,11 @@ class ProceduralHeroLocomotion {
     const j = this.joints;
     if (!j.hip) return { applied: false, speed: this.speed, normalizedSpeed: 0 };
     const active = (state === 'walk' || state === 'run') && player.grounded !== false;
+    if (!active && state !== 'idle') {
+      this.weight.value = this.weight.velocity = 0;
+      for (const foot of Object.values(this.feet)) foot.planted = foot.wasStance = false;
+      return { applied: false, speed: this.speed, normalizedSpeed: clamp(this.speed / PLAYER_SPRINT, 0, 1) };
+    }
     const weight = spring(this.weight, active ? 1 : 0, dt, active ? 18 : 14);
     if (!active && weight < .002) {
       for (const foot of Object.values(this.feet)) foot.planted = foot.wasStance = false;
@@ -212,9 +219,10 @@ class ProceduralHeroLocomotion {
     }
 
     const runBlend = clamp((this.speed - 5.5) / (PLAYER_SPRINT - 5.5), 0, 1);
-    const strideDistance = THREE.MathUtils.lerp(2.55, 4.15, runBlend);
+    const phaseRunBlend = clamp((this.instantSpeed - 5.5) / (PLAYER_SPRINT - 5.5), 0, 1);
+    const strideDistance = THREE.MathUtils.lerp(2.55, 4.15, phaseRunBlend);
     this.phase = advanceStridePhase(this.phase, active ? distance : 0, strideDistance);
-    const phaseRate = strideDistance > 0 ? this.speed / strideDistance : 0;
+    const phaseRate = strideDistance > 0 ? this.instantSpeed / strideDistance : 0;
     const stepLength = THREE.MathUtils.lerp(.27, .48, runBlend);
     const stepHeight = THREE.MathUtils.lerp(.085, .19, runBlend);
     const wave = Math.sin(this.phase * TAU);
@@ -267,11 +275,16 @@ class ProceduralHeroLocomotion {
     const j = this.joints;
     if (!j.hip) return false;
     if (state !== 'dodge') {
+      if (this.roll.active && distance > 0) {
+        this.roll.distance += distance;
+        this.roll.angle = rollAngleFromDistance(this.roll.distance, this.roll.radius);
+      }
       this.roll.active = false;
       return false;
     }
     if (!this.roll.active) {
       this.roll.active = true;
+      this.roll.frames = 0;
       this.roll.distance = 0;
       this.roll.angle = 0;
       this.roll.angularVelocity = 0;
@@ -282,7 +295,9 @@ class ProceduralHeroLocomotion {
     }
 
     let travel = distance;
-    if (!(travel > 1e-5) && player?.vel) travel = Math.min(DODGE_SPEED * dt * 1.25, horizontalLength(player.vel) * dt);
+    if (!(travel > 1e-5) && this.roll.frames === 0 && player?.vel)
+      travel = Math.min(DODGE_SPEED * dt * 1.25, horizontalLength(player.vel) * dt);
+    this.roll.frames++;
     this.roll.distance += Math.max(0, travel);
     const nextAngle = rollAngleFromDistance(this.roll.distance, this.roll.radius);
     const omega = dt > 0 ? (nextAngle - this.roll.angle) / dt : 0;

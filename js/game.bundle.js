@@ -17010,7 +17010,7 @@ void main() {
           const attributes = gl.getContextAttributes();
           let initialRenderTarget = null;
           let newRenderTarget = null;
-          const controllers2 = [];
+          const controllers3 = [];
           const controllerInputSources = [];
           const currentSize = new Vector2();
           let currentPixelRatio = null;
@@ -17026,26 +17026,26 @@ void main() {
           this.enabled = false;
           this.isPresenting = false;
           this.getController = function(index) {
-            let controller = controllers2[index];
+            let controller = controllers3[index];
             if (controller === void 0) {
               controller = new WebXRController();
-              controllers2[index] = controller;
+              controllers3[index] = controller;
             }
             return controller.getTargetRaySpace();
           };
           this.getControllerGrip = function(index) {
-            let controller = controllers2[index];
+            let controller = controllers3[index];
             if (controller === void 0) {
               controller = new WebXRController();
-              controllers2[index] = controller;
+              controllers3[index] = controller;
             }
             return controller.getGripSpace();
           };
           this.getHand = function(index) {
-            let controller = controllers2[index];
+            let controller = controllers3[index];
             if (controller === void 0) {
               controller = new WebXRController();
-              controllers2[index] = controller;
+              controllers3[index] = controller;
             }
             return controller.getHandSpace();
           };
@@ -17054,7 +17054,7 @@ void main() {
             if (controllerIndex === -1) {
               return;
             }
-            const controller = controllers2[controllerIndex];
+            const controller = controllers3[controllerIndex];
             if (controller !== void 0) {
               controller.update(event.inputSource, event.frame, customReferenceSpace || referenceSpace);
               controller.dispatchEvent({ type: event.type, data: event.inputSource });
@@ -17069,11 +17069,11 @@ void main() {
             session.removeEventListener("squeezeend", onSessionEvent);
             session.removeEventListener("end", onSessionEnd);
             session.removeEventListener("inputsourceschange", onInputSourcesChange);
-            for (let i = 0; i < controllers2.length; i++) {
+            for (let i = 0; i < controllers3.length; i++) {
               const inputSource = controllerInputSources[i];
               if (inputSource === null) continue;
               controllerInputSources[i] = null;
-              controllers2[i].disconnect(inputSource);
+              controllers3[i].disconnect(inputSource);
             }
             _currentDepthNear = null;
             _currentDepthFar = null;
@@ -17216,14 +17216,14 @@ void main() {
               const index = controllerInputSources.indexOf(inputSource);
               if (index >= 0) {
                 controllerInputSources[index] = null;
-                controllers2[index].disconnect(inputSource);
+                controllers3[index].disconnect(inputSource);
               }
             }
             for (let i = 0; i < event.added.length; i++) {
               const inputSource = event.added[i];
               let controllerIndex = controllerInputSources.indexOf(inputSource);
               if (controllerIndex === -1) {
-                for (let i2 = 0; i2 < controllers2.length; i2++) {
+                for (let i2 = 0; i2 < controllers3.length; i2++) {
                   if (i2 >= controllerInputSources.length) {
                     controllerInputSources.push(inputSource);
                     controllerIndex = i2;
@@ -17236,7 +17236,7 @@ void main() {
                 }
                 if (controllerIndex === -1) break;
               }
-              const controller = controllers2[controllerIndex];
+              const controller = controllers3[controllerIndex];
               if (controller) {
                 controller.connect(inputSource);
               }
@@ -17422,9 +17422,9 @@ void main() {
                 }
               }
             }
-            for (let i = 0; i < controllers2.length; i++) {
+            for (let i = 0; i < controllers3.length; i++) {
               const inputSource = controllerInputSources[i];
-              const controller = controllers2[i];
+              const controller = controllers3[i];
               if (inputSource !== null && controller !== void 0) {
                 controller.update(inputSource, frame, customReferenceSpace || referenceSpace);
               }
@@ -25642,6 +25642,344 @@ void main() {
     }
   });
 
+  // js/art/procedural-locomotion.js
+  function advanceStridePhase(phase, distance, strideDistance) {
+    if (!Number.isFinite(phase)) phase = 0;
+    if (!(distance > 0) || !(strideDistance > 0)) return wrap01(phase);
+    return wrap01(phase + distance / strideDistance);
+  }
+  function rollAngleFromDistance(distance, radius = DODGE_SPEED * DODGE_DURATION / TAU) {
+    if (!(distance > 0) || !(radius > 0)) return 0;
+    return distance / radius;
+  }
+  function sampleFootCycle(phase, runBlend = 0, sideOffset = 0) {
+    const cycle = wrap01(phase + sideOffset);
+    const stanceRatio = MathUtils.lerp(0.64, 0.54, clamp2(runBlend, 0, 1));
+    const stance = cycle < stanceRatio;
+    if (stance) {
+      const t2 = cycle / stanceRatio;
+      return { cycle, stance, progress: t2, travel: 1 - t2 * 2, lift: 0, contact: 1 - smoothstep2(0.86, 1, t2) };
+    }
+    const t = (cycle - stanceRatio) / (1 - stanceRatio);
+    const travel = MathUtils.lerp(-1, 1, smoothstep2(0, 1, t));
+    const lift = Math.pow(Math.sin(Math.PI * t), 1.25);
+    return { cycle, stance, progress: t, travel, lift, contact: 0 };
+  }
+  function horizontalLength(vector) {
+    return Math.hypot(vector.x, vector.z);
+  }
+  function localDirection(root, vector, target) {
+    const length = horizontalLength(vector);
+    if (length < 1e-5) return target.set(0, 0, 1);
+    const yaw = root.rotation.y, c2 = Math.cos(yaw), s = Math.sin(yaw);
+    target.set((c2 * vector.x - s * vector.z) / length, 0, (s * vector.x + c2 * vector.z) / length);
+    return target;
+  }
+  function setAxis(object, axis, target, weight) {
+    object.rotation[axis] = MathUtils.lerp(object.rotation[axis], target, clamp2(weight, 0, 1));
+  }
+  function worldFromRoot(root, x, y, z, target) {
+    const yaw = root.rotation.y, c2 = Math.cos(yaw), s = Math.sin(yaw);
+    target.set(
+      root.position.x + c2 * x + s * z,
+      root.position.y + y,
+      root.position.z - s * x + c2 * z
+    );
+    return target;
+  }
+  function finiteHeight(getHeight, x, z, fallback) {
+    if (typeof getHeight !== "function") return fallback;
+    const value = getHeight(x, z);
+    return Number.isFinite(value) ? value : fallback;
+  }
+  function proceduralLocomotionFor(root) {
+    if (!controllers.has(root)) controllers.set(root, new ProceduralHeroLocomotion(root));
+    return controllers.get(root);
+  }
+  function updateProceduralHero(root, dt, player2, movement, state) {
+    return proceduralLocomotionFor(root).update(dt, player2, movement, state);
+  }
+  function releaseProceduralLocomotion(root) {
+    controllers.delete(root);
+  }
+  var PROCEDURAL_LOCOMOTION_VERSION, PROCEDURAL_HERO_STATES, TAU, controllers, clamp2, smoothstep2, damp2, wrap01, ProceduralHeroLocomotion;
+  var init_procedural_locomotion = __esm({
+    "js/art/procedural-locomotion.js"() {
+      init_three_module();
+      init_constants();
+      init_motion();
+      PROCEDURAL_LOCOMOTION_VERSION = "distance-gait-1";
+      PROCEDURAL_HERO_STATES = Object.freeze(["walk", "run", "dodge"]);
+      TAU = Math.PI * 2;
+      controllers = /* @__PURE__ */ new WeakMap();
+      clamp2 = MathUtils.clamp;
+      smoothstep2 = (a, b, x) => {
+        if (a === b) return x < a ? 0 : 1;
+        const t = clamp2((x - a) / (b - a), 0, 1);
+        return t * t * (3 - 2 * t);
+      };
+      damp2 = (value, target, frequency, dt) => MathUtils.lerp(value, target, 1 - Math.exp(-frequency * Math.max(0, dt)));
+      wrap01 = (value) => (value % 1 + 1) % 1;
+      ProceduralHeroLocomotion = class {
+        constructor(root) {
+          this.root = root;
+          this.joints = root.userData.joints;
+          this.previousPosition = root.position.clone();
+          this.previousYaw = root.rotation.y;
+          this.phase = 0;
+          this.distance = 0;
+          this.frames = 0;
+          this.instantSpeed = 0;
+          this.speed = 0;
+          this.forwardSpeed = 0;
+          this.lateralSpeed = 0;
+          this.acceleration = 0;
+          this.weight = { value: 0, velocity: 0 };
+          this.lean = { value: 0, velocity: 0 };
+          this.sideLean = { value: 0, velocity: 0 };
+          this.direction = new Vector3(0, 0, 1);
+          this.velocity = new Vector3();
+          this.delta = new Vector3();
+          this.temp = new Vector3();
+          this.temp2 = new Vector3();
+          this.rollQuaternion = new Quaternion();
+          this.rollAxis = new Vector3(1, 0, 0);
+          this.roll = { active: false, frames: 0, distance: 0, angle: 0, angularVelocity: 0, radius: DODGE_SPEED * DODGE_DURATION / TAU };
+          this.feet = {
+            L: { planted: false, wasStance: false, anchor: new Vector3(), swingStart: new Vector3(), landing: new Vector3() },
+            R: { planted: false, wasStance: false, anchor: new Vector3(), swingStart: new Vector3(), landing: new Vector3() }
+          };
+          this.restHipY = this.joints.hip?.position.y || 0;
+        }
+        measure(dt, player2) {
+          this.delta.copy(this.root.position).sub(this.previousPosition);
+          this.previousPosition.copy(this.root.position);
+          let distance = horizontalLength(this.delta);
+          if (!Number.isFinite(distance) || distance > 3) {
+            distance = 0;
+            for (const foot of Object.values(this.feet)) foot.planted = foot.wasStance = false;
+          }
+          const velocitySpeed = player2?.vel ? Math.hypot(player2.vel.x || 0, player2.vel.z || 0) : 0;
+          if (this.frames === 0 && distance <= 1e-6 && dt > 0 && velocitySpeed > 0) distance = velocitySpeed * dt;
+          this.frames++;
+          const measuredSpeed = dt > 0 && distance > 1e-6 ? distance / dt : 0;
+          this.instantSpeed = measuredSpeed;
+          const targetSpeed = Math.min(PLAYER_SPRINT * 1.4, measuredSpeed);
+          const oldSpeed = this.speed;
+          this.speed = damp2(this.speed, targetSpeed, 13, dt);
+          this.acceleration = damp2(this.acceleration, dt > 0 ? (this.speed - oldSpeed) / dt : 0, 8, dt);
+          if (player2?.vel && horizontalLength(player2.vel) > 0.01) this.velocity.set(player2.vel.x, 0, player2.vel.z);
+          else if (dt > 0) this.velocity.set(this.delta.x / dt, 0, this.delta.z / dt);
+          else this.velocity.set(0, 0, 0);
+          localDirection(this.root, this.velocity, this.direction);
+          this.forwardSpeed = damp2(this.forwardSpeed, this.speed * this.direction.z, 12, dt);
+          this.lateralSpeed = damp2(this.lateralSpeed, this.speed * this.direction.x, 12, dt);
+          const yawDelta = Math.atan2(Math.sin(this.root.rotation.y - this.previousYaw), Math.cos(this.root.rotation.y - this.previousYaw));
+          this.previousYaw = this.root.rotation.y;
+          this.yawRate = dt > 0 ? clamp2(yawDelta / dt, -5, 5) : 0;
+          this.distance += distance;
+          return distance;
+        }
+        predictedFoot(side, sample, stepLength, stepHeight, phaseRate, movement, target) {
+          const sign2 = side === "L" ? -1 : 1;
+          const leg = this.joints[`leg${side}`];
+          const foot = this.feet[side];
+          const moveX = this.direction.x * sample.travel * stepLength * 0.5;
+          const moveZ = this.direction.z * sample.travel * stepLength * 0.5;
+          const sideLead = this.direction.x * sample.lift * stepLength * 0.08;
+          const localX = (leg?.position.x || sign2 * 0.29) + moveX + sideLead;
+          const localZ = moveZ;
+          const ground = finiteHeight(
+            movement.getHeight,
+            this.root.position.x + Math.cos(this.root.rotation.y) * localX + Math.sin(this.root.rotation.y) * localZ,
+            this.root.position.z - Math.sin(this.root.rotation.y) * localX + Math.cos(this.root.rotation.y) * localZ,
+            this.root.position.y
+          );
+          worldFromRoot(this.root, localX, ground - this.root.position.y + 0.075 + sample.lift * stepHeight, localZ, target);
+          if (sample.stance) {
+            if (!foot.wasStance || !foot.planted) {
+              foot.anchor.copy(target);
+              foot.anchor.y = ground + 0.075;
+              foot.planted = true;
+              this.root.userData.footstepSerial = (this.root.userData.footstepSerial || 0) + 1;
+              this.root.userData.lastFootstep = side;
+            }
+            target.copy(foot.anchor);
+            target.y = finiteHeight(movement.getHeight, target.x, target.z, target.y - 0.075) + 0.075;
+          } else {
+            if (foot.wasStance || !foot.swingStart.lengthSq()) foot.swingStart.copy(foot.anchor.lengthSq() ? foot.anchor : target);
+            foot.planted = false;
+            const remaining = phaseRate > 1e-3 ? (1 - sample.cycle) / phaseRate : 0;
+            const futureX = this.root.position.x + this.velocity.x * remaining;
+            const futureZ = this.root.position.z + this.velocity.z * remaining;
+            const landingLocalX = (leg?.position.x || sign2 * 0.29) + this.direction.x * stepLength * 0.5;
+            const landingLocalZ = this.direction.z * stepLength * 0.5;
+            const yaw = this.root.rotation.y, c2 = Math.cos(yaw), s = Math.sin(yaw);
+            foot.landing.set(futureX + c2 * landingLocalX + s * landingLocalZ, 0, futureZ - s * landingLocalX + c2 * landingLocalZ);
+            foot.landing.y = finiteHeight(movement.getHeight, foot.landing.x, foot.landing.z, this.root.position.y) + 0.075;
+            target.lerpVectors(foot.swingStart, foot.landing, smoothstep2(0, 1, sample.progress));
+            const baseGround = finiteHeight(movement.getHeight, target.x, target.z, target.y - 0.075);
+            target.y = baseGround + 0.075 + sample.lift * stepHeight;
+          }
+          foot.wasStance = sample.stance;
+          return target;
+        }
+        applyLeg(side, targetWorld, sample, movement, weight) {
+          const j = this.joints;
+          const leg = j[`leg${side}`], knee = j[`knee${side}`], ankle = j[`ankle${side}`];
+          if (!leg || !knee || !ankle || !j.hip) return;
+          this.root.updateMatrixWorld(true);
+          this.temp.copy(targetWorld);
+          j.hip.worldToLocal(this.temp).sub(leg.position);
+          const solved = solveLeg(this.temp.z, -this.temp.y);
+          setAxis(leg, "x", solved.hip, weight);
+          setAxis(leg, "z", clamp2(-this.temp.x * 1.45, -0.42, 0.42), weight * 0.85);
+          setAxis(knee, "x", solved.knee, weight);
+          const yaw = this.root.rotation.y;
+          const fx = Math.sin(yaw) * 0.13, fz = Math.cos(yaw) * 0.13;
+          const hForward = finiteHeight(movement.getHeight, targetWorld.x + fx, targetWorld.z + fz, targetWorld.y) - finiteHeight(movement.getHeight, targetWorld.x - fx, targetWorld.z - fz, targetWorld.y);
+          const slope = Math.atan2(hForward, 0.26);
+          const toeLift = sample.stance ? 0 : sample.lift * 0.35;
+          const ankleTarget = clamp2(-slope - leg.rotation.x - knee.rotation.x - j.hip.rotation.x + toeLift, -1.05, 1.05);
+          setAxis(ankle, "x", ankleTarget, weight);
+        }
+        applyGait(dt, player2, movement, state, distance) {
+          const j = this.joints;
+          if (!j.hip) return { applied: false, speed: this.speed, normalizedSpeed: 0 };
+          const active = (state === "walk" || state === "run") && player2.grounded !== false;
+          if (!active && state !== "idle") {
+            this.weight.value = this.weight.velocity = 0;
+            for (const foot of Object.values(this.feet)) foot.planted = foot.wasStance = false;
+            return { applied: false, speed: this.speed, normalizedSpeed: clamp2(this.speed / PLAYER_SPRINT, 0, 1) };
+          }
+          const weight = spring(this.weight, active ? 1 : 0, dt, active ? 18 : 14);
+          if (!active && weight < 2e-3) {
+            for (const foot of Object.values(this.feet)) foot.planted = foot.wasStance = false;
+            return { applied: false, speed: this.speed, normalizedSpeed: clamp2(this.speed / PLAYER_SPRINT, 0, 1) };
+          }
+          const runBlend = clamp2((this.speed - 5.5) / (PLAYER_SPRINT - 5.5), 0, 1);
+          const phaseRunBlend = clamp2((this.instantSpeed - 5.5) / (PLAYER_SPRINT - 5.5), 0, 1);
+          const strideDistance = MathUtils.lerp(2.55, 4.15, phaseRunBlend);
+          this.phase = advanceStridePhase(this.phase, active ? distance : 0, strideDistance);
+          const phaseRate = strideDistance > 0 ? this.instantSpeed / strideDistance : 0;
+          const stepLength = MathUtils.lerp(0.27, 0.48, runBlend);
+          const stepHeight = MathUtils.lerp(0.085, 0.19, runBlend);
+          const wave = Math.sin(this.phase * TAU);
+          const doubleSupport = Math.abs(Math.sin(this.phase * TAU));
+          const directionForward = this.direction.z;
+          const directionSide = this.direction.x;
+          const forwardLean = clamp2(this.forwardSpeed / PLAYER_SPRINT * 0.16 + this.acceleration * 4e-3, -0.12, 0.24);
+          const lateralLean = clamp2(-this.lateralSpeed / PLAYER_SPRINT * 0.11 - this.yawRate * 0.025, -0.18, 0.18);
+          const hipTwist = wave * MathUtils.lerp(0.045, 0.095, runBlend) * directionForward;
+          j.hip.position.y = MathUtils.lerp(j.hip.position.y, this.restHipY - doubleSupport * MathUtils.lerp(0.018, 0.052, runBlend), weight);
+          setAxis(j.hip, "x", spring(this.lean, forwardLean, dt, 12), weight);
+          setAxis(j.hip, "z", spring(this.sideLean, lateralLean, dt, 11), weight);
+          setAxis(j.hip, "y", hipTwist + directionSide * wave * 0.04, weight);
+          const armAmplitude = MathUtils.lerp(0.38, 0.82, runBlend);
+          for (const [side, sign2] of [["L", 1], ["R", -1]]) {
+            const arm = j[`arm${side}`], elbow = j[`elbow${side}`];
+            if (!arm || !elbow) continue;
+            const swing = wave * sign2;
+            const armX = -swing * armAmplitude * directionForward - Math.abs(directionSide) * 0.12;
+            const armZ = (side === "L" ? 0.17 : -0.15) - swing * armAmplitude * directionSide * 0.55;
+            const elbowX = -0.18 - Math.max(0, swing) * MathUtils.lerp(0.18, 0.48, runBlend);
+            setAxis(arm, "x", armX, weight);
+            setAxis(arm, "z", armZ, weight);
+            setAxis(elbow, "x", elbowX, weight);
+          }
+          const left = sampleFootCycle(this.phase, runBlend, 0);
+          const right = sampleFootCycle(this.phase, runBlend, 0.5);
+          this.applyLeg("L", this.predictedFoot("L", left, stepLength, stepHeight, phaseRate, movement, this.temp2), left, movement, weight);
+          this.applyLeg("R", this.predictedFoot("R", right, stepLength, stepHeight, phaseRate, movement, this.temp2), right, movement, weight);
+          this.root.userData.groundAdaptedFeet = 2;
+          this.root.userData.visualSpeed = this.speed;
+          this.root.userData.gait = {
+            version: PROCEDURAL_LOCOMOTION_VERSION,
+            phase: this.phase,
+            speed: this.speed,
+            strideDistance,
+            stepLength,
+            runBlend,
+            contacts: { L: left.stance, R: right.stance },
+            direction: { x: this.direction.x, z: this.direction.z }
+          };
+          return { applied: true, speed: this.speed, normalizedSpeed: clamp2(this.speed / PLAYER_SPRINT, 0, 1), phase: this.phase };
+        }
+        applyRoll(dt, player2, state, distance) {
+          const j = this.joints;
+          if (!j.hip) return false;
+          if (state !== "dodge") {
+            if (this.roll.active && distance > 0) {
+              this.roll.distance += distance;
+              this.roll.angle = rollAngleFromDistance(this.roll.distance, this.roll.radius);
+            }
+            this.roll.active = false;
+            return false;
+          }
+          if (!this.roll.active) {
+            this.roll.active = true;
+            this.roll.frames = 0;
+            this.roll.distance = 0;
+            this.roll.angle = 0;
+            this.roll.angularVelocity = 0;
+            const direction = player2.dodgeDir || this.velocity;
+            localDirection(this.root, direction, this.direction);
+            this.rollAxis.set(this.direction.z, 0, -this.direction.x).normalize();
+            for (const foot of Object.values(this.feet)) foot.planted = foot.wasStance = false;
+          }
+          let travel = distance;
+          if (!(travel > 1e-5) && this.roll.frames === 0 && player2?.vel)
+            travel = Math.min(DODGE_SPEED * dt * 1.25, horizontalLength(player2.vel) * dt);
+          this.roll.frames++;
+          this.roll.distance += Math.max(0, travel);
+          const nextAngle = rollAngleFromDistance(this.roll.distance, this.roll.radius);
+          const omega = dt > 0 ? (nextAngle - this.roll.angle) / dt : 0;
+          this.roll.angularVelocity = damp2(this.roll.angularVelocity, omega, 18, dt);
+          this.roll.angle = nextAngle;
+          const expectedDistance = DODGE_SPEED * DODGE_DURATION;
+          const progress = clamp2(this.roll.distance / expectedDistance, 0, 1);
+          const tuck = smoothstep2(0, 0.16, progress) * (1 - smoothstep2(0.78, 1, progress));
+          const compression = Math.sin(progress * Math.PI) * 0.085;
+          this.rollQuaternion.setFromAxisAngle(this.rollAxis, this.roll.angle);
+          j.hip.quaternion.multiply(this.rollQuaternion);
+          j.hip.position.y = this.restHipY + compression;
+          for (const side of ["L", "R"]) {
+            const arm = j[`arm${side}`], elbow = j[`elbow${side}`], leg = j[`leg${side}`], knee = j[`knee${side}`], ankle = j[`ankle${side}`];
+            if (arm) {
+              setAxis(arm, "x", -0.65 - tuck * 1.05, 1);
+              setAxis(arm, "z", side === "L" ? 0.26 : -0.26, 1);
+            }
+            if (elbow) setAxis(elbow, "x", -0.45 - tuck * 0.72, 1);
+            if (leg) {
+              setAxis(leg, "x", -0.55 - tuck * 0.92, 1);
+              setAxis(leg, "z", side === "L" ? -0.12 : 0.12, 1);
+            }
+            if (knee) setAxis(knee, "x", 0.65 + tuck * 1.22, 1);
+            if (ankle) setAxis(ankle, "x", 0.18 + tuck * 0.36, 1);
+          }
+          this.root.userData.visualSpeed = this.speed;
+          this.root.userData.proceduralRoll = {
+            version: PROCEDURAL_LOCOMOTION_VERSION,
+            distance: this.roll.distance,
+            angle: this.roll.angle,
+            angularVelocity: this.roll.angularVelocity,
+            radius: this.roll.radius,
+            progress,
+            axis: this.rollAxis.toArray()
+          };
+          return true;
+        }
+        update(dt, player2, movement, state) {
+          dt = clamp2(dt || 0, 0, 0.05);
+          const distance = this.measure(dt, player2);
+          const rolling = this.applyRoll(dt, player2, state, distance);
+          if (rolling) return { applied: true, rolling: true, speed: this.speed, normalizedSpeed: clamp2(this.speed / PLAYER_SPRINT, 0, 1) };
+          return this.applyGait(dt, player2, movement || {}, state, distance);
+        }
+      };
+    }
+  });
+
   // js/art/animation.js
   function selectHeroState(p, movement = {}) {
     if (!p.alive) return "death";
@@ -25668,6 +26006,14 @@ void main() {
       const duration = durations[state], tracks = [], steps = 12;
       const times = Array.from({ length: steps + 1 }, (_, i) => i / steps * duration);
       const values = {};
+      if (hero && PROCEDURAL_HERO_STATES.includes(state)) {
+        const neutralTimes = [0, duration];
+        for (const name of Object.keys(joints)) for (const axis of ["x", "y", "z"])
+          tracks.push(new NumberKeyframeTrack(`${name}.rotation[${axis}]`, neutralTimes, [0, 0]));
+        if (joints.hip) tracks.push(new NumberKeyframeTrack("hip.position[y]", neutralTimes, [joints.hip.position.y, joints.hip.position.y]));
+        clips[state] = new AnimationClip(state, duration, tracks);
+        continue;
+      }
       for (const name of Object.keys(joints)) for (const axis of ["x", "y", "z"]) values[`${name}.rotation[${axis}]`] = [];
       const vertical = hero || humanoid2 || kind !== "worm" ? joints.hip?.position.y : void 0;
       if (vertical !== void 0) values["hip.position[y]"] = [];
@@ -25711,16 +26057,6 @@ void main() {
             put("legR", "x", -0.28 * pulse);
             put("kneeL", "x", 0.6 * pulse);
             put("kneeR", "x", 0.6 * pulse);
-          }
-          if (state === "dodge") {
-            put("hip", "x", Math.PI * 2 * t);
-            bob = 0.12;
-            put("legL", "x", -1.5);
-            put("legR", "x", -1.5);
-            put("kneeL", "x", 1.8);
-            put("kneeR", "x", 1.8);
-            put("armL", "x", -1.7);
-            put("armR", "x", -1.7);
           }
           if (state.startsWith("attack")) {
             const n = Number(state.at(-1)), wind = t < 0.25 ? t / 0.25 : 1 - (t - 0.25) / 0.75;
@@ -25807,8 +26143,8 @@ void main() {
     return clips;
   }
   function animatorFor(root) {
-    if (!controllers.has(root)) controllers.set(root, new RigAnimator(root));
-    return controllers.get(root);
+    if (!controllers2.has(root)) controllers2.set(root, new RigAnimator(root));
+    return controllers2.get(root);
   }
   function animateHero(root, dt, p, movement = {}) {
     const anim = animatorFor(root);
@@ -25816,9 +26152,10 @@ void main() {
     if (p.grounded && !anim.previousGrounded && p.alive && !p.dodging) anim.landUntil = anim.time + 0.18;
     if ((anim.landUntil || 0) > anim.time && ["idle", "walk", "run"].includes(state)) state = "land";
     anim.previousGrounded = p.grounded || movement.menu;
-    const cadence = ["walk", "run"].includes(state) ? movement.sprinting ? 1.45 : 1.18 : 1;
-    anim.update(dt, state, cadence);
-    groundHero(root, dt, p, movement);
+    anim.update(dt, state, 1);
+    const procedural = updateProceduralHero(root, dt, p, movement, state);
+    if (!procedural.applied) groundHero(root, dt, p, movement);
+    secondaryMotion(root, dt, state, procedural.normalizedSpeed * 1.5, anim.time);
     root.userData.body.material.emissive.set("#cd5b3b");
     root.userData.body.material.emissiveIntensity = Math.max(0, p.dmgFlash || 0) * 2;
     if (root.userData.sword) root.userData.sword.visible = !p.dodging;
@@ -25826,7 +26163,9 @@ void main() {
   function animateCreature(root, dt, e) {
     const visual = root.userData.visual || root;
     const state = !e.alive || e.dying ? "death" : e.windup > 0 || e.windupTimer > 0 ? "windup" : e.flashTimer > 0.07 ? "hit" : e.atkAnim > 0 || e.swipeLunging ? "attack1" : e.charging || e.state === "chase" ? "run" : "walk";
-    animatorFor(visual).update(dt, state, visual.userData.kind === "wasp" || visual.userData.kind === "firefly" ? 3 : 1);
+    const anim = animatorFor(visual);
+    anim.update(dt, state, visual.userData.kind === "wasp" || visual.userData.kind === "firefly" ? 3 : 1);
+    secondaryMotion(visual, dt, state, state === "run" ? 1.5 : state === "walk" ? 0.6 : 0, anim.time);
     if (visual.userData.body) {
       visual.userData.body.material.emissive.set("#cd714e");
       visual.userData.body.material.emissiveIntensity = Math.max(0, e.flashTimer || 0) * 2.5;
@@ -25834,16 +26173,18 @@ void main() {
   }
   function releaseAnimator(root) {
     const target = root.userData.visual || root;
-    controllers.get(target)?.dispose();
-    controllers.delete(target);
+    controllers2.get(target)?.dispose();
+    controllers2.delete(target);
+    releaseProceduralLocomotion(target);
   }
-  var controllers, clipCache, LOOP, HERO_STATES, RigAnimator;
+  var controllers2, clipCache, LOOP, HERO_STATES, RigAnimator;
   var init_animation = __esm({
     "js/art/animation.js"() {
       init_three_module();
       init_palette();
       init_motion();
-      controllers = /* @__PURE__ */ new WeakMap();
+      init_procedural_locomotion();
+      controllers2 = /* @__PURE__ */ new WeakMap();
       clipCache = /* @__PURE__ */ new Map();
       LOOP = /* @__PURE__ */ new Set(["idle", "walk", "run", "air", "fall", "block", "swim", "windup"]);
       HERO_STATES = Object.freeze(["idle", "walk", "run", "jump", "air", "fall", "land", "dodge", "attack1", "attack2", "attack3", "block", "parry", "hit", "death", "cast", "swim"]);
@@ -25883,8 +26224,6 @@ void main() {
           this.time += dt;
           this.actions[this.state].setEffectiveTimeScale(speed);
           this.mixer.update(dt);
-          const joints = this.root.userData.joints;
-          secondaryMotion(this.root, dt, state, state === "run" ? 1.5 : state === "walk" ? 0.6 : 0, this.time);
           this.root.userData.animationState = this.state;
         }
         dispose() {
