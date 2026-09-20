@@ -18,15 +18,18 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Apply checksum-verified source edits
-        run: |
-          sed -i 's/bronzege/bronze/g' .refinement.py
-          python .refinement.py
+      - name: Apply checksum-verified review corrections
+        run: python .refinement-polish.py
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run check && npm test && npm run build
       - name: Capture full-resolution offline visuals
         run: node scripts/capture-refinement.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: procedural-refinement-frames
+          path: test-results/refinement/
+          retention-days: 7
       - name: Verify local boot and gameplay
         run: npm run smoke:local && npm run smoke:art
       - name: Archive review
@@ -34,7 +37,7 @@ jobs:
         run: |
           mkdir -p /tmp/refinement-review
           cp -R test-results /tmp/refinement-review/ 2>/dev/null || true
-          tar --exclude=.git --exclude=node_modules --exclude=test-results --exclude=.refinement.py -czf /tmp/refinement-review/sources.tar.gz .
+          tar --exclude=.git --exclude=node_modules --exclude=test-results --exclude=.refinement-polish.py -czf /tmp/refinement-review/sources.tar.gz .
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -45,8 +48,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm -f .refinement.py
+          git rm -f .refinement-polish.py
           git add js scripts tests docs
           git diff --cached --check
-          git commit -m "feat(art): refine procedural characters, motion and foliage"
+          git commit -m "fix(art): correct understory vertex colours and resident leg attachment"
           git push origin HEAD:work/procedural-refinement
